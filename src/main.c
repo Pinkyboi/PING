@@ -1,16 +1,35 @@
-
 #include "ping.h"
 
-addrinfo *get_first_valid_addrinfo(addrinfo *server_result)
+uint16_t checksum(uint16_t *buff, ssize_t size)
+{
+    int count = size;
+    uint16_t checksum = 0;
+
+    while (count > 1)
+    {
+        checksum += *(buff++);
+        count -= 2;
+    if (count > 0)
+        checksum += *(uint8_t *)buff;
+    }
+
+    while (checksum >> 16)
+        checksum = (checksum & 0xffff) + (checksum >> 16);
+
+    return (~checksum);
+}
+
+struct addrinfo *get_first_valid_addrinfo(struct addrinfo *server_result)
 {
 
-    for (addrinfo *p = server_result; p != NULL; p = p->ai_next)
+    for (struct addrinfo *p = server_result; p != NULL; p = p->ai_next)
     {
         if (p->ai_family != AF_INET && p->ai_family != AF_INET6)
             break;
         else if (p->ai_protocol != IPPROTO_TCP && p->ai_protocol != IPPROTO_UDP)
             break;
-        else if (p->ai_addrlen != sizeof(sockaddr_in) && p->ai_addrlen != sizeof(sockaddr_in6))
+        else if (p->ai_addrlen != sizeof(struct sockaddr_in)
+            && p->ai_addrlen != sizeof(struct sockaddr_in6))
             break;
         else if (p->ai_socktype != SOCK_STREAM)
             break;
@@ -22,55 +41,182 @@ addrinfo *get_first_valid_addrinfo(addrinfo *server_result)
     return NULL;
 }
 
-
-void get_naddress_info(addrinfo *addrinfo, void** addr, char** ipver)
+void handle_error(char *msg, short exit_code, bool condition)
 {
-    if (addrinfo->ai_family == AF_INET)
-    { // IPv4
-        *addr = &(((struct sockaddr_in *)addrinfo->ai_addr)->sin_addr);
-        *ipver = strdup("IPv4");
-    }
-    else
-    { // IPv6
-        *addr = &(((struct sockaddr_in6 *)addrinfo->ai_addr)->sin6_addr);
-        *ipver = strdup("IPv6");
+    if (condition)
+    {
+        perror(msg);
+        exit(exit_code);
     }
 }
 
+int get_socketfd(int domain, int type, int protocol)
+{
+    int sockfd;
 
+    handle_error("Error in socket.", 1, (sockfd = socket(domain, type, protocol)) == -1);
+    return sockfd;
+}
+
+struct sockaddr_in* get_sockaddr_in(struct in_addr addr)
+{
+    struct sockaddr_in *sock_addr;
+
+    sock_addr = (struct sockaddr_in *)calloc(sizeof(struct sockaddr_in), 1);
+    sock_addr->sin_family = AF_INET;
+    sock_addr->sin_addr = addr;
+    return sock_addr;
+}
+
+struct sockaddr_in6* get_sockaddr_in6(struct in6_addr addr)
+{
+    struct sockaddr_in6* sock_addr;
+
+    sock_addr = (struct sockaddr_in6 *)calloc(sizeof(struct sockaddr_in6), 1);
+    sock_addr->sin6_family = AF_INET6;
+    sock_addr->sin6_addr = addr;
+    return sock_addr;
+}
+
+void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
+{
+    struct icmp *icmp_header;
+    
+    icmp_header = (struct icmp *)packet_buffer;
+    icmp_header->icmp_type = ICMP_ECHO;
+    icmp_header->icmp_code = 0;
+    icmp_header->icmp_id = getpid();
+    icmp_header->icmp_seq = seq;
+    icmp_header->icmp_cksum = checksum((uint16_t *)packet_buffer, packet_len);
+}
+
+struct msghdr* create_message_header(void* message_header, int message_len)
+{
+    struct msghdr  *msg;
+    struct iovec   *iov;
+
+    msg = (struct msghdr *)calloc(sizeof(struct msghdr), 1);
+    iov = (struct iovec *)calloc(sizeof(struct iovec), 1);
+    iov->iov_base = message_header;
+    iov->iov_len = message_len;
+    msg->msg_iov = iov;
+    msg->msg_iovlen = 1;
+    return msg;
+}
+
+struct timeval get_timeval()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv;
+}
+
+float get_time_diff(struct timeval start, struct timeval end)
+{
+    return (end.tv_sec - start.tv_sec) * 1000.0f + (end.tv_usec - start.tv_usec) / 1000.0f;
+}
+
+void read_packet_message(void *message_buffer, int original_packet_len)
+{
+    struct ip   *ip_header;
+    struct icmp *icmp_header;
+
+    int i = -1;
+    char *message = (char *)message_buffer;
+
+    ip_header = (struct ip *)message;
+    if (ip_header->ip_p != IPPROTO_ICMP)
+        return;
+    icmp_header = (struct icmp *)(message + sizeof(struct ip));
+    if (icmp_header->icmp_type != ICMP_ECHOREPLY)
+        return;
+    printf("Packet sent: %d\n", icmp_header->icmp_seq);
+}
+
+void send_icmp_packet(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len, int seq)
+{
+    char packet_buffer[packet_len];
+    char recv_buffer[packet_len + IP_HDR_LEN];
+    struct msghdr *msg;
+
+    memset(packet_buffer, 0, packet_len);
+    memset(recv_buffer, 0, packet_len + IP_HDR_LEN);
+    msg = create_message_header(recv_buffer, IP_HDR_LEN);
+    fill_icmp_packet(packet_buffer, packet_len, seq);
+    handle_error("Error in sendto.\n", 1, sendto(sockfd, packet_buffer, packet_len, 0, dest_addr, dest_addr_len) == -1);
+    printf("Packet sent: %d\n", seq);
+    if (recvmsg(sockfd, msg, 0))
+        read_packet_message(recv_buffer, packet_len);
+    free(msg->msg_iov);
+    free(msg);
+}
+
+
+bool g_sending = true;
+
+void unlock_sending(int signum)
+{
+    g_sending = true;
+}
+
+void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len)
+{
+    int seq = 1;
+
+    signal(SIGALRM, unlock_sending);
+    for (;;)
+    {
+        if (g_sending)
+        {
+            send_icmp_packet(sockfd, dest_addr, dest_addr_len, packet_len, seq);
+            g_sending = false;
+            seq++;
+            alarm(1);
+        }
+        usleep(42);
+    }
+}
+
+struct sockaddr* get_sockaddr(struct addrinfo *addrinfo)
+{
+    struct sockaddr *sockaddr;
+
+    if (addrinfo->ai_family == AF_INET)
+    {
+        struct sockaddr_in *sockaddr = (struct sockaddr_in *)addrinfo->ai_addr;
+        sockaddr = (void *)get_sockaddr_in(sockaddr->sin_addr);
+    }
+    else if (addrinfo->ai_family == AF_INET6)
+    {
+        struct sockaddr_in6 *sockaddr = (struct sockaddr_in6 *)addrinfo->ai_addr;
+        sockaddr = (void *)get_sockaddr_in6(sockaddr->sin6_addr);
+    }
+    return sockaddr;
+}
 
 int main(int argc, char **argv)
 {
-    int con_status;
-    addrinfo hints;
-    addrinfo *server_result;
+    struct addrinfo hints;
+    struct addrinfo *server_result;
+    struct addrinfo *dest_addrinfo;
+    struct sockaddr *socket_address;
 
     memset(&hints, 0, sizeof(hints));
-    hints = (addrinfo){ .ai_family = AF_UNSPEC,
+    hints = (struct addrinfo){ .ai_family = AF_UNSPEC,
                         .ai_socktype = SOCK_STREAM,
                         .ai_flags = AI_PASSIVE };
 
-    if (argc != 2)
-        exit(1);
+    handle_error("First argument unfound.", 1, argc != 2);
+    handle_error("Error in getaddrinfo.", 1, !!(getaddrinfo(argv[1], NULL, &hints, &server_result)));
 
-    if (con_status == getaddrinfo(argv[1], NULL, &hints, &server_result))
-        exit(1);
+    dest_addrinfo = server_result;
+    handle_error("Error in getaddrinfo.", 1, dest_addrinfo == NULL);
 
-    char ipstr[INET6_ADDRSTRLEN];
-    char *ipver;
-    void *addr;
+    int sockfd = get_socketfd(dest_addrinfo->ai_family, SOCK_RAW, IPPROTO_ICMP);
+    socket_address = get_sockaddr(dest_addrinfo);
 
-    addrinfo *p;
-
-    p = get_valid_first_addrinfo(server_result);
-
-    get_network_address(p, &addr, &ipver);
-    inet_ntop(p->ai_family, addr, ipstr, INET6_ADDRSTRLEN);
-
-
+    ping_routine(sockfd, socket_address, dest_addrinfo->ai_addrlen, PACKET_SIZE);
+    
     freeaddrinfo(server_result);
-    freeaddrinfo(p);
-    free(ipver);
-    free(addr);
     return 0;
 }
