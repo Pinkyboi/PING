@@ -22,6 +22,7 @@
 #define ICMP_HDR_LEN sizeof(struct icmp)
 #define IP_HDR_LEN sizeof(struct ip)
 
+
 typedef enum bool
 {
     false,
@@ -32,7 +33,7 @@ struct sockaddr*        get_sockaddr(struct addrinfo *addrinfo);
 struct sockaddr_in*     get_sockaddr_in(struct in_addr addr);
 struct sockaddr_in6*    get_sockaddr_in6(struct in6_addr addr);
 struct addrinfo*        get_first_valid_addrinfo(struct addrinfo *server_result);
-struct msghdr*          create_message_header(void* message_header, int message_len);
+struct msghdr           create_message_header(void* message_header, int message_len);
 struct timeval          get_timeval();
 
 void                    read_packet_message(void *message_buffer, int original_packet_len);
