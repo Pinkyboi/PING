@@ -1,5 +1,7 @@
 #include "ping.h"
 
+t_ping_stats    g_ping_stats;
+
 uint16_t checksum(uint16_t *buff, ssize_t size)
 {
     int count = size;
@@ -41,21 +43,10 @@ struct addrinfo *get_first_valid_addrinfo(struct addrinfo *server_result)
     return NULL;
 }
 
-void handle_error(char *msg, short exit_code, bool condition)
+void handle_error(char *msg, short exit_code)
 {
-    if (condition)
-    {
-        perror(msg);
-        exit(exit_code);
-    }
-}
-
-int get_socketfd(int domain, int type, int protocol)
-{
-    int sockfd;
-
-    handle_error("Error in socket.", 1, (sockfd = socket(domain, type, protocol)) == -1);
-    return sockfd;
+    perror(msg);
+    exit(exit_code);
 }
 
 struct sockaddr_in* get_sockaddr_in(struct in_addr addr)
@@ -78,6 +69,7 @@ struct sockaddr_in6* get_sockaddr_in6(struct in6_addr addr)
     return sock_addr;
 }
 
+
 void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
 {
     struct icmp *icmp_header;
@@ -90,13 +82,16 @@ void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
     icmp_header->icmp_cksum = checksum((uint16_t *)packet_buffer, packet_len);
 }
 
-struct msghdr create_message_header(void* message_buffer, int message_len)
+struct msghdr *create_message_header(void* message_buffer, int message_len)
 {
-    struct msghdr  msg;
+    struct msghdr   *msg;
+    struct msghdr   *iov;
 
-    msg.msg_iov->iov_base = message_buffer;
-    msg.msg_iov->iov_len = message_len;
-    msg.msg_iovlen = 1;
+    msg = (struct msghdr *)calloc(sizeof(struct msghdr), 1);
+    msg->msg_iov = (struct iovec *)calloc(sizeof(struct iovec), 1);
+    msg->msg_iov->iov_base = message_buffer;
+    msg->msg_iov->iov_len = message_len;
+    msg->msg_iovlen = 1;
     return msg;
 }
 
@@ -112,7 +107,20 @@ float get_time_diff(struct timeval start, struct timeval end)
     return (end.tv_sec - start.tv_sec) * 1000.0f + (end.tv_usec - start.tv_usec) / 1000.0f;
 }
 
-void read_packet_message(void *message_buffer, int original_packet_len)
+void print_packet_recipe(struct ip* ip_header, struct icmp *icmp_header, float time_diff)
+{
+    char ip_addr[INET6_ADDRSTRLEN];
+
+    inet_ntop((ip_header->ip_v == 4) ? AF_INET : AF_INET6, &ip_header->ip_src, ip_addr, sizeof(ip_addr));
+    printf("%d bytes from %s icmp_seq=%d ttl=%d time=%.3f ms\n",
+        ip_header->ip_len,
+        ip_addr,
+        icmp_header->icmp_seq,
+        ip_header->ip_ttl,
+        time_diff);
+}
+
+void read_packet_message(void *message_buffer, int original_packet_len, float time_diff)
 {
     struct ip   *ip_header;
     struct icmp *icmp_header;
@@ -122,36 +130,67 @@ void read_packet_message(void *message_buffer, int original_packet_len)
 
     ip_header = (struct ip *)message;
     if (ip_header->ip_p != IPPROTO_ICMP)
-        return;
-    icmp_header = (struct icmp *)(message + sizeof(struct ip));
+        handle_error("Invalid protocol", 1);
+    icmp_header = (struct icmp *)(message + (ip_header->ip_hl << 2));
     if (icmp_header->icmp_type != ICMP_ECHOREPLY)
-        return;
-    printf("Packet received: %d\n", icmp_header->icmp_seq);
+        handle_error("Invalid type", 1);
+    if (checksum((uint16_t *)icmp_header, original_packet_len) != 0)
+        handle_error("(BAD CHECKSUM)", 1);
+
+    print_packet_recipe(ip_header, icmp_header, time_diff);
+}
+
+
+void receive_icmp_packet(int sockfd, int packet_len, struct timeval send_time)
+{
+    char            recv_buffer[IP_HDR_LEN + ICMP_HDR_LEN + packet_len];
+    struct msghdr   *msg;
+
+    memset(recv_buffer, 0, sizeof(recv_buffer));
+    msg = create_message_header(recv_buffer, sizeof(recv_buffer));
+    if (recvmsg(sockfd, msg, 0))
+    {
+        read_packet_message(recv_buffer, packet_len, get_time_diff(send_time, get_timeval()));
+        g_ping_stats.packet_recv_nbr++;
+    }
+    free(msg->msg_iov);
+    free(msg);
 }
 
 void send_icmp_packet(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len, int seq)
 {
-    char            packet_buffer[packet_len];
-    char            recv_buffer[ICMP_HDR_LEN + packet_len];
-    struct msghdr   msg;
+    char            packet_buffer[ICMP_HDR_LEN + packet_len];
+    struct timeval  send_time;
+    struct timeval  recv_time;
 
-    
     memset(packet_buffer, 0, sizeof(packet_buffer));
-    memset(recv_buffer, 0, sizeof(recv_buffer));
-    msg = create_message_header(recv_buffer, sizeof(recv_buffer));
     fill_icmp_packet(packet_buffer, packet_len, seq);
-    handle_error("Error in sendto", 1, sendto(sockfd, packet_buffer, sizeof(packet_buffer), 0, dest_addr, dest_addr_len) == -1);
-    printf("Packet sent: %d\n", seq);
-    if (recvmsg(sockfd, &msg, 0))
-        read_packet_message(recv_buffer, packet_len);
+    if (sendto(sockfd, packet_buffer, sizeof(packet_buffer), 0, dest_addr, dest_addr_len) == -1)
+        handle_error("Error in sendto", 1);
+    send_time = get_timeval();
+    g_ping_stats.packet_sent_nbr++;
+    receive_icmp_packet(sockfd, packet_len, send_time);
+    recv_time = get_timeval();
 }
 
-
-bool g_sending = true;
+float fractional_percentage(float numerator, float denominator)
+{
+    return (numerator / denominator) * 100.0;
+}
 
 void unlock_sending(int signum)
 {
-    g_sending = true;
+    g_ping_stats.sending_status = true;
+}
+
+void print_ping_statistics(int signnum)
+{
+    float packet_lost = fractional_percentage(g_ping_stats.packet_sent_nbr - g_ping_stats.packet_recv_nbr, g_ping_stats.packet_sent_nbr);
+    
+    printf("\n--- %s ping statistics ---\n", g_ping_stats.host_name);
+    printf("%d packets transmitted, %d packets received, %.1f%% packet loss\n",
+            g_ping_stats.packet_sent_nbr, g_ping_stats.packet_sent_nbr, packet_lost);
+    exit(0);
 }
 
 void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len)
@@ -159,15 +198,17 @@ void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int
     int seq = 1;
 
     signal(SIGALRM, unlock_sending);
+    signal(SIGINT, print_ping_statistics);
     for (;;)
     {
-        if (g_sending)
+        if (g_ping_stats.sending_status)
         {
             send_icmp_packet(sockfd, dest_addr, dest_addr_len, packet_len, seq);
-            g_sending = false;
+            g_ping_stats.sending_status = false;
             seq++;
             alarm(1);
         }
+
         usleep(42);
     }
 }
@@ -191,28 +232,34 @@ struct sockaddr* get_sockaddr(struct addrinfo *addrinfo)
 
 int main(int argc, char **argv)
 {
+    int             sockfd;
     struct addrinfo hints;
     struct addrinfo *server_result;
     struct addrinfo *dest_addrinfo;
     struct sockaddr *socket_address;
 
     memset(&hints, 0, sizeof(hints));
-    hints = (struct addrinfo){ .ai_family = AF_UNSPEC,
-                        .ai_socktype = SOCK_RAW,
-                        .ai_protocol = IPPROTO_ICMP,
-                        .ai_flags = AI_PASSIVE };
+    hints = (struct addrinfo){.ai_socktype = SOCK_RAW,
+                                .ai_protocol = IPPROTO_ICMP};
 
-    handle_error("First argument unfound", 1, argc != 2);
-    handle_error("Error in getaddrinfo", 1, !!(getaddrinfo(argv[1], NULL, &hints, &server_result)));
+    if (argc != 2)
+        handle_error("First argument unfound", 1);
+    if (getaddrinfo(argv[1], NULL, &hints, &server_result) != 0)
+        handle_error("Error in getaddrinfo", 1);
 
     dest_addrinfo = get_first_valid_addrinfo(server_result);
-    handle_error("Error in getaddrinfo", 1, dest_addrinfo == NULL);
+    if (dest_addrinfo == NULL)
+        handle_error("Error in getaddrinfo", 1);
 
-    int sockfd = get_socketfd(dest_addrinfo->ai_family, SOCK_RAW, IPPROTO_ICMP);
-    handle_error("Error in socket", 1, sockfd == -1);
+    sockfd = socket(dest_addrinfo->ai_family, SOCK_RAW, IPPROTO_ICMP);
+    if (sockfd == -1)
+        handle_error("Error in socket", 1);
 
     socket_address = get_sockaddr(dest_addrinfo);
 
+    g_ping_stats.sending_status = true;
+    g_ping_stats.host_name = argv[1];
+    
     ping_routine(sockfd, socket_address, dest_addrinfo->ai_addrlen, PACKET_SIZE);
     
     freeaddrinfo(server_result);
