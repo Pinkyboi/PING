@@ -24,8 +24,6 @@
 
 #define HOST_NAME_MAX 256
 
-#define POW2(X) X * X
-
 typedef enum bool
 {
     false,
@@ -50,11 +48,12 @@ typedef struct s_rtt_info
 
 typedef struct  s_ping_stats
 {
-    int         packet_sent_nbr;
-    int         packet_recv_nbr;
-    char        host_name[HOST_NAME_MAX];
-    t_rtt_info  rtt_info;
-    bool        sending_status;
+    int             packet_sent_nbr;
+    int             packet_recv_nbr;
+    char            host_name[HOST_NAME_MAX];
+    struct timeval  start_time;
+    t_rtt_info      rtt_info;
+    bool            sending_status;
 
 }               t_ping_stats;
 
@@ -70,7 +69,7 @@ void                    send_icmp_packet(int sockfd, struct sockaddr *dest_addr,
 void                    unlock_sending(int signum);
 void                    handle_error(char *msg, short exit_code);
 void                    ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len);
-bool                    read_packet_message(void *message_buffer, int original_packet_len, float time_diff);
+bool                    read_packet_message(void *message_buffer, int original_packet_len, float time_diff, int seq);
 
 uint16_t                checksum(uint16_t *buff, ssize_t size);
 int                     get_socketfd(int domain, int type, int protocol);
