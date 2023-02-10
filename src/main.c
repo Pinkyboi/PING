@@ -63,7 +63,7 @@ struct sockaddr_in* get_sockaddr_in(struct in_addr addr)
 void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
 {
     struct icmp *icmp_header;
-    
+
     icmp_header = (struct icmp *)packet_buffer;
     icmp_header->icmp_type = ICMP_ECHO;
     icmp_header->icmp_code = 0;
@@ -88,6 +88,7 @@ struct msghdr *create_message_header(void* message_buffer, int message_len)
 struct timeval get_timeval()
 {
     struct timeval tv;
+
     gettimeofday(&tv, NULL);
     return tv;
 }
@@ -113,17 +114,20 @@ float get_standard_deviation_rtt(t_packet_node *packet_list, float average_rtt)
 
 void print_packet_recipe(struct ip* ip_header, struct icmp *icmp_header, float time_diff)
 {
-    printf("%d bytes from %s icmp_seq=%d ttl=%d time=%.3f ms",
-        ip_header->ip_len,
-        g_ping_stats.specs.resolved_hostname,
-        icmp_header->icmp_seq,
-        ip_header->ip_ttl,
-        time_diff);
+    if (!(g_ping_stats.specs.options & N_OPTION ) && 
+        strcmp(g_ping_stats.specs.resolved_hostname_ip, g_ping_stats.specs.unresolved_hostname))
+    {
+        printf("%d bytes from %s", ip_header->ip_len, g_ping_stats.specs.resolved_hostname);
+        printf(" (%s)", g_ping_stats.specs.resolved_hostname_ip);
+    }
+    else
+        printf("%d bytes from %s", ip_header->ip_len, g_ping_stats.specs.resolved_hostname_ip);
+    printf(" icmp=%d ttl=%d time=%.3f ms\n", icmp_header->icmp_seq, ip_header->ip_ttl,time_diff);
 }
 
 void print_ip_hdr(struct ip* ip_hdr)
 {
-    return;    
+    return;
 }
 
 void icmphdr_errors(int type, int code, struct ip* ip_hdr)
@@ -214,11 +218,6 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
     }
 }
 
-bool check_seq_occurence(t_packet_node *recv_seq_list, int seq)
-{
-    return false;
-}
-
 void print_hdr_errors(struct icmp*icmp_hdr, struct ip*ip_hdr)
 {
     if (checksum((uint16_t *)icmp_hdr, ip_hdr->ip_len) != 0)
@@ -244,7 +243,6 @@ t_packet_node *read_packet_message(void *message_buffer, int original_packet_len
         packet_node->recv_time = recv_time;
         print_packet_recipe(ip_hdr, icmp_hdr, get_time_diff(packet_node->send_time,
             packet_node->recv_time));
-        print_hdr_errors(icmp_hdr, ip_hdr);
         return packet_node;
     }
     else
@@ -276,9 +274,9 @@ int get_icmp_seq(void *message_buffer)
     
     ip_hdr = (struct ip *)message_buffer;
     icmp_hdr = (struct icmp*)(message_buffer + (ip_hdr->ip_hl  <<  2));
-
     return icmp_hdr->icmp_seq;    
 }
+
 
 void receive_icmp_packet(int sockfd, int packet_len)
 {
@@ -399,11 +397,21 @@ void print_ping_statistics(int signnum)
     exit(0);
 }
 
+
+void print_ping_header(void)
+{
+    printf("PING %s (%s): %d data bytes\n", 
+        g_ping_stats.specs.unresolved_hostname, 
+        g_ping_stats.specs.resolved_hostname_ip,
+        g_ping_stats.specs.packet_size);
+}
+
 void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int packet_len)
 {
     int             seq;
 
     seq = 0;
+    print_ping_header();
     signal(SIGALRM, unlock_sending);
     signal(SIGINT, print_ping_statistics);
     while (true)
@@ -485,13 +493,15 @@ int get_option_num_arg(char *argument, int max_value, char *option)
     return option_num_arg;
 }
 
-void set_flags(char **prog_arg)
+void get_ping_options(char **prog_arg)
 {
-    int i = -1;
+    int i = 0;
+    int step = 1;
     char *argument;
 
-    while(prog_arg[++i])
+    while(prog_arg[i])
     {
+        step = 1;
         if (*prog_arg[i] == '-')
         {
             if (!strcmp(prog_arg[i], "-v"))
@@ -500,136 +510,98 @@ void set_flags(char **prog_arg)
                 pingv4_usage();
             else if (!strcmp(prog_arg[i], "-n"))
                 g_ping_stats.specs.options |= N_OPTION;
-
-            else if (!strncmp(prog_arg[i], "-i", 2))
-            {
-                g_ping_stats.specs.options |= I_OPTION;
-                if (strlen(prog_arg[i]) != 2)
-                    argument = prog_arg[i] + 2;
-                else
-                {
-                    argument = prog_arg[i + 1];
-                    i++;
-                }
-                g_ping_stats.specs.interval = get_option_num_arg(argument, MAX_INTERVAL, "-i");
-            }
-
-            else if (!strncmp(prog_arg[i], "-c", 2))
-            {
-                g_ping_stats.specs.options |= C_OPTION;
-                if (strlen(prog_arg[i]) != 2)
-                    argument = prog_arg[i] + 2;
-                else
-                {
-                    argument = prog_arg[i + 1];
-                    i++;
-                }
-                g_ping_stats.specs.max_packet = get_option_num_arg(argument, MAX_PACKET_COUNT, "-c");
-            }
-            else if (!strncmp(prog_arg[i], "-s", 2))
-            {
-                g_ping_stats.specs.options |= S_OPTION;
-                if (strlen(prog_arg[i]) != 2)
-                    argument = prog_arg[i] + 2;
-                else
-                {
-                    argument = prog_arg[i + 1];
-                    i++;
-                }
-                g_ping_stats.specs.packet_size = get_option_num_arg(argument, MAX_PACKET_SIZE, "-s");
-            }
-            else if (!strncmp(prog_arg[i], "-W", 2))
-            {
-                g_ping_stats.specs.options |= W_OPTION;
-                if (strlen(prog_arg[i]) != 2)
-                    argument = prog_arg[i] + 2;
-                else
-                {
-                    argument = prog_arg[i + 1];
-                    i++;
-                }
-                g_ping_stats.specs.timeout.tv_sec = get_option_num_arg(argument, MAX_TIMEOUT, "-W");
-            }
-            else if (!strncmp(prog_arg[i], "-t", 2))
-            {
-                g_ping_stats.specs.options |= T_OPTION;
-                if (strlen(prog_arg[i]) != 2)
-                    argument = prog_arg[i] + 2;
-                else
-                {
-                    argument = prog_arg[i + 1];
-                    i++;
-                }
-                g_ping_stats.specs.ttl = get_option_num_arg(argument, MAX_TTL, "-t");
-            }
             else
             {
-                printf("ping: unknown option -- %s\n", prog_arg[i]);
-                pingv4_usage();
+                if (strlen(prog_arg[i]) != 2)
+                    argument = prog_arg[i] + 2;
+                else
+                {
+                    argument = prog_arg[i + 1];
+                    step = 2;
+                }
+                if (!strncmp(prog_arg[i], "-c", 2))
+                {
+                    g_ping_stats.specs.options |= C_OPTION;
+                    g_ping_stats.specs.max_packet = get_option_num_arg(argument, MAX_PACKET_COUNT, "-c");
+                }
+                else if (!strncmp(prog_arg[i], "-i", 2))
+                    g_ping_stats.specs.interval = get_option_num_arg(argument, MAX_INTERVAL, "-i");
+                else if (!strncmp(prog_arg[i], "-s", 2))
+                    g_ping_stats.specs.packet_size = get_option_num_arg(argument, MAX_PACKET_SIZE, "-s");
+                else if (!strncmp(prog_arg[i], "-W", 2))
+                    g_ping_stats.specs.timeout.tv_sec = get_option_num_arg(argument, MAX_TIMEOUT, "-W");
+                else if (!strncmp(prog_arg[i], "-t", 2))
+                    g_ping_stats.specs.ttl = get_option_num_arg(argument, MAX_TTL, "-t");
+                else
+                {
+                    printf("ping: unknown option -- %s\n", prog_arg[i]);
+                    pingv4_usage();
+                }
             }
         }
         else if (g_ping_stats.specs.unresolved_hostname == NULL)
             g_ping_stats.specs.unresolved_hostname = prog_arg[i];
         else
-        {
-            printf("%s\n",prog_arg[i]);
             pingv4_usage();
-        }
+        i += step;
     }
 }
 
 
-void setup_ping(void)
+void init_ping(void)
 {
     g_ping_stats.sending_status = true;
     g_ping_stats.start_time = get_timeval();
-    g_ping_stats.specs.packet_size = DEFAUL_TPACKET_SIZE;
-    g_ping_stats.specs.unresolved_hostname = NULL;
-    g_ping_stats.specs.max_packet = -1;
-    g_ping_stats.specs.options = 0;
-    g_ping_stats.specs.interval = DEFAULT_INTERVAL;
     g_ping_stats.specs.timeout = (struct timeval){.tv_sec = DEFAULT_TIMEOUT_SEC, 0};
+    g_ping_stats.specs.unresolved_hostname = NULL;
+    g_ping_stats.specs.packet_size = DEFAUL_TPACKET_SIZE;
+    g_ping_stats.specs.interval = DEFAULT_INTERVAL;
     g_ping_stats.specs.ttl = DEFAULT_TTL;
 }
 
-int main(int argc, char **argv)
+void start_connection(struct addrinfo *dest_addrinfo)
 {
-    int             sockfd;
-    struct addrinfo *server_result;
-    struct addrinfo *dest_addrinfo;
-    struct sockaddr *socket_address;
-
-    if (argc < 2)
-        pingv4_usage();
-
-    setup_ping();
-    set_flags(&argv[1]);
-    server_result = get_host_addrinfo(g_ping_stats.specs.unresolved_hostname);
-    dest_addrinfo = get_first_valid_addrinfo(server_result);
-
-    if (dest_addrinfo == NULL)
-        handle_error("Error in getaddrinfo", 1);
+    int                 sockfd;
+    struct sockaddr     *socket_address;
+    struct sockaddr_in  *socket_address_in;
 
     sockfd = socket(dest_addrinfo->ai_family, SOCK_RAW, IPPROTO_ICMP);
-    struct timeval timeout_value = {
-        .tv_sec = 1,
-        .tv_usec = 0
-    };
+    if (sockfd == -1)
+        handle_error("ping: Error establishing connection", 1);
+    socket_address = get_sockaddr(dest_addrinfo);
+    socket_address_in = (struct sockaddr_in *)socket_address;
+    if (socket_address == NULL)
+        handle_error("ping: Error establishing connection", 1);
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO,
         (void *)&g_ping_stats.specs.timeout, sizeof(g_ping_stats.specs.timeout));
     setsockopt(sockfd, IPPROTO_IP, IP_TTL,
         (void *)&g_ping_stats.specs.ttl, sizeof(g_ping_stats.specs.ttl));
-
-    if (sockfd == -1)
-        handle_error("Error in socket", 1);
-    socket_address = get_sockaddr(dest_addrinfo);
-    if (socket_address == NULL)
-        handle_error("Error in get_sockaddr", 1);
-
+    inet_ntop(dest_addrinfo->ai_family, &socket_address_in->sin_addr, g_ping_stats.specs.resolved_hostname_ip,
+        sizeof(g_ping_stats.specs.resolved_hostname_ip));
     getnameinfo(dest_addrinfo->ai_addr, dest_addrinfo->ai_addrlen,
-    g_ping_stats.specs.resolved_hostname, sizeof(g_ping_stats.specs.resolved_hostname), NULL, 0, 0);
+        g_ping_stats.specs.resolved_hostname, sizeof(g_ping_stats.specs.resolved_hostname), NULL, 0, 0);
     ping_routine(sockfd, socket_address, dest_addrinfo->ai_addrlen, g_ping_stats.specs.packet_size);
-    
+    close(sockfd);
+}
+
+int main(int argc, char **argv)
+{
+    struct addrinfo *server_result;
+    struct addrinfo *dest_addrinfo;
+
+    if (argc == 1)
+        pingv4_usage();
+    init_ping();
+    get_ping_options(&argv[1]);
+    server_result = get_host_addrinfo(g_ping_stats.specs.unresolved_hostname);
+    dest_addrinfo = get_first_valid_addrinfo(server_result);
+    if (dest_addrinfo == NULL)
+    {
+        printf("ping: cannot resolve %s: %s", 
+            g_ping_stats.specs.unresolved_hostname, gai_strerror(errno));
+        exit(1);
+    }
+    start_connection(dest_addrinfo);
     freeaddrinfo(server_result);
     return 0;
 }

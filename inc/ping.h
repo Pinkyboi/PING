@@ -32,11 +32,6 @@
 
 #define HOST_NAME_MAX 256
 
-#define NO_ICP_ERR 0
-#define NORMAL_ICP_ERR 1
-#define BAD_CODE_ICMP_ERR 2
-
-
 #define H_OPTION (1 << (0))
 #define V_OPTION (1 << (1))
 #define C_OPTION (1 << (2))
@@ -45,7 +40,6 @@
 #define I_OPTION (1 << (5))
 #define W_OPTION (1 << (6))
 #define T_OPTION (1 << (7))
-
 
 
 #define SOCKET_ERROR -1
@@ -84,6 +78,7 @@ typedef struct      s_ping_spec
     int             interval;
     struct timeval  timeout;
     char            resolved_hostname[HOST_NAME_MAX];
+    char            resolved_hostname_ip[INET6_ADDRSTRLEN];
     char            *unresolved_hostname;
 }                   t_ping_spec;
 
