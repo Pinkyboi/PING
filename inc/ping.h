@@ -11,8 +11,10 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netdb.h>
+#include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+#include <linux/errqueue.h>
 #include <math.h>
 
 #define ICMP_HDR_LEN 8
@@ -69,6 +71,12 @@ typedef struct s_rtt_info
     t_packet_node   *packet_list;
 }               t_rtt_info;
 
+typedef struct  s_msg_data
+{
+    struct msghdr  msg_hdr;
+    struct iovec   msg_iov;
+}               t_msg_data;
+
 typedef struct      s_ping_spec
 {
     u_int8_t        options;
@@ -97,7 +105,7 @@ typedef struct      s_ping_stats
 struct sockaddr*        get_sockaddr(struct addrinfo *addrinfo);
 struct sockaddr_in*     get_sockaddr_in(struct in_addr addr);
 struct addrinfo*        get_first_valid_addrinfo(struct addrinfo *server_result);
-struct msghdr*          create_message_header(void* message_header, int message_len);
+// t_msg_data              create_message_header(void* message_header, int message_len);
 struct timeval          get_timeval();
 
 void                    send_icmp_packet(int sockfd, struct sockaddr *dest_addr,
@@ -118,4 +126,6 @@ float                   get_time_diff(struct timeval start, struct timeval end);
 
 
 
+float pow_2(float x);
+float newtonian_sqrt(float x, float precision);
 #endif
