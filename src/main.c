@@ -2,6 +2,24 @@
 
 t_ping_stats    g_ping_stats;
 
+uint16_t my_ntohs(int16_t nshort)
+{
+    #if __BYTE_ORDER == __LITTLE_ENDIAN
+        return ((((nshort) & 0xFF00) >> 8) | (((nshort) & 0x00FF) << 8));
+    #else
+        return nshort;
+    #endif
+}
+
+uint16_t my_htons(int16_t nshort)
+{
+    #if __BYTE_ORDER == __LITTLE_ENDIAN
+        return ((((nshort) & 0x00FF) << 8) | (((nshort) & 0xFF00) >> 8));
+    #else
+        return nshort;
+    #endif
+}
+
 uint16_t checksum(uint16_t *buff, ssize_t size)
 {
     int count = size;
@@ -104,12 +122,12 @@ void print_packet_recipe(struct ip* ip_header, struct icmp *icmp_header, float t
     if (!(g_ping_stats.specs.options & N_OPTION ) && 
         strcmp(g_ping_stats.specs.resolved_hostname_ip, g_ping_stats.specs.unresolved_hostname))
     {
-        printf("%d bytes from %s", g_ping_stats.specs.packet_size + ICMP_HDR_LEN,
+        printf("%d bytes from %s", my_ntohs(ip_header->ip_len) - (ip_header->ip_hl << 2),
             g_ping_stats.specs.resolved_hostname);
         printf(" (%s)", g_ping_stats.specs.resolved_hostname_ip);
     }
     else
-        printf("%d bytes from %s", g_ping_stats.specs.packet_size + ICMP_HDR_LEN,
+        printf("%d bytes from %s", my_ntohs(ip_header->ip_len) - (ip_header->ip_hl << 2),
             g_ping_stats.specs.resolved_hostname_ip);
     printf(" icmp=%d ttl=%d time=%.3f ms\n", icmp_header->icmp_seq, ip_header->ip_ttl,time_diff);
 }
