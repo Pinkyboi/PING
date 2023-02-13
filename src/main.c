@@ -494,19 +494,6 @@ void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int
     }
 }
 
-struct sockaddr* get_sockaddr(struct addrinfo *addrinfo)
-{
-    struct sockaddr *sockaddr;
-
-    sockaddr = NULL;
-    if (addrinfo->ai_family == AF_INET)
-    {
-        struct sockaddr_in *sockaddr_v4 = (struct sockaddr_in *)addrinfo->ai_addr;
-        sockaddr = (struct sockaddr *)get_sockaddr_in(sockaddr_v4->sin_addr);
-    }
-    return sockaddr;
-}
-
 struct addrinfo* get_host_addrinfo(char *host_name)
 {
     struct addrinfo hints;
@@ -650,7 +637,7 @@ void start_connection(struct addrinfo *dest_addrinfo)
     sockfd = socket(dest_addrinfo->ai_family, SOCK_RAW, IPPROTO_ICMP);
     if (sockfd == -1)
         handle_error("ping: Error establishing connection", 1);
-    socket_address = get_sockaddr(dest_addrinfo);
+    socket_address = dest_addrinfo->ai_addr;
     socket_address_in = (struct sockaddr_in *)socket_address;
     if (socket_address == NULL)
         handle_error("ping: Error establishing connection", 1);
