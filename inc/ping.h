@@ -19,15 +19,16 @@
 
 #define ICMP_HDR_LEN 8
 #define IP_HDR_LEN 20
+#define C_DATA_LEN 521
 
-#define MAX_TTL 255
+#define MAX_TTL 1024
 #define MAX_TIMEOUT 2147483
 #define MAX_INTERVAL 2147483
 #define MAX_PACKET_COUNT 2147483647
 #define MAX_PACKET_SIZE 65527
 
 #define DEFAULT_TTL 64
-#define DEFAULT_TIMEOUT_SEC  1
+#define DEFAULT_TIMEOUT_SEC 1
 #define DEFAULT_INTERVAL 1
 #define DEFAULT_TTL 64
 #define DEFAUL_TPACKET_SIZE 56
@@ -77,14 +78,21 @@ typedef struct  s_msg_data
     struct iovec   msg_iov;
 }               t_msg_data;
 
+typedef struct s_cmsg_info
+{
+    struct sock_extended_err    *error_ptr;
+    struct cmsghdr              *cmsg;
+}               t_cmsg_info;
+
 typedef struct      s_ping_spec
 {
     u_int8_t        options;
+    struct timeval  timeout;
+    bool            hold_err;
     int             max_packet;
     int             packet_size;
     int             ttl;
     int             interval;
-    struct timeval  timeout;
     char            resolved_hostname[HOST_NAME_MAX];
     char            resolved_hostname_ip[INET6_ADDRSTRLEN];
     char            *unresolved_hostname;

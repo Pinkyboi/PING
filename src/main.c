@@ -159,7 +159,7 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
         else
         {
             printf("Destination Unreachable, Bad Code %d\n", code);
-            if (g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
                 print_ip_hdr(ip_hdr);
         }
     }
@@ -172,7 +172,7 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
         else
         {
             printf("Time Exceeded, Bad Code %d\n", code);
-            if (g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
                 print_ip_hdr(ip_hdr);
         }
     }
@@ -191,14 +191,14 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
         else
         {
             printf("Redirect, Bad Code: %d\n", code);
-            if (g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
                 print_ip_hdr(ip_hdr);
         }
     }
     else
     {
         printf("Bad ICMP type: %d\n", type);
-        if (g_ping_stats.specs.options & V_OPTION)
+        if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
             print_ip_hdr(ip_hdr);
     }
 }
@@ -298,51 +298,56 @@ t_msg_data create_message_header(void* message_buffer, int message_len,
     return msg;
 }
 
-int check_err_msg(struct msghdr msg_hdr, struct ip* ip_hdr)
-{
-    struct sock_extended_err    *e;
-    struct cmsghdr              *cmsg;
 
-    cmsg = CMSG_FIRSTHDR(&msg_hdr);
-    e = NULL;
-    while (cmsg)
+void check_err_msg(int sockfd, int packet_len)
+{
+    char                        recv_buffer[ICMP_HDR_LEN + IP_HDR_LEN + packet_len];
+    char                        control_buffer[1024];
+    t_msg_data                  err_msg;
+    int                         control_bytes;
+    t_cmsg_info                 cmsg_info;
+
+    err_msg = create_message_header(recv_buffer, sizeof(recv_buffer),
+        control_buffer, sizeof(control_buffer));
+    control_bytes = recvmsg(sockfd, &err_msg.msg_hdr, MSG_DONTWAIT | MSG_ERRQUEUE);
+    if (control_bytes <= 0)
+        return ;
+    cmsg_info.error_ptr = NULL;
+    cmsg_info.cmsg = CMSG_FIRSTHDR(&err_msg.msg_hdr);
+    while (cmsg_info.cmsg)
     {
-        if (cmsg->cmsg_level == SOL_IP && cmsg->cmsg_type == IP_RECVERR)
-            e = (struct sock_extended_err *)CMSG_DATA(cmsg);
-        cmsg = CMSG_NXTHDR(&msg_hdr, cmsg);
+        if (cmsg_info.cmsg->cmsg_level == SOL_IP && cmsg_info.cmsg->cmsg_type == IP_RECVERR)
+            cmsg_info.error_ptr = (struct sock_extended_err *)CMSG_DATA(cmsg_info.cmsg);
+        cmsg_info.cmsg = CMSG_NXTHDR(&err_msg.msg_hdr, cmsg_info.cmsg);
     }
-    if (e)
-        icmphdr_errors(e->ee_type, e->ee_code, ip_hdr);
-    return e != NULL;
+    if (cmsg_info.error_ptr)
+    {
+        printf("%d bytes From %s: ", control_bytes,
+            inet_ntoa(((struct sockaddr_in *)SO_EE_OFFENDER(cmsg_info.error_ptr))->sin_addr));
+        icmphdr_errors(cmsg_info.error_ptr->ee_type, cmsg_info.error_ptr->ee_code, NULL);
+    }
 }
 
 
 void receive_icmp_packet(int sockfd, int packet_len)
 {
     char                    recv_buffer[ICMP_HDR_LEN + IP_HDR_LEN + packet_len];
-    char                    control_buffer[512];
+    char                    control_buffer[C_DATA_LEN];
     t_msg_data              re_msg;
     t_packet_node           *packet_node;
-    struct timeval          recv_time;
-    int                     bytes;
+    int                     message_bytes;
 
- 
     re_msg = create_message_header(recv_buffer, sizeof(recv_buffer), 
             control_buffer, sizeof(control_buffer));
-    int message_bytes = recvmsg(sockfd, &re_msg.msg_hdr,  MSG_DONTWAIT);
-    int control_bytes = recvmsg(sockfd, &re_msg.msg_hdr, MSG_ERRQUEUE | MSG_DONTWAIT);
-    if (message_bytes <= 0 && control_bytes <= 0)
-        return ;
-    if (control_bytes > 0)
-        check_err_msg(re_msg.msg_hdr, (struct ip *)recv_buffer);
-    else if (message_bytes)
+    message_bytes = recvmsg(sockfd, &re_msg.msg_hdr, MSG_WAITALL);
+    if (message_bytes < 0 && errno == EWOULDBLOCK)
+        printf("Request timeout for icmp_seq %d\n", g_ping_stats.packet_sent_nbr - 1);     
+    if (message_bytes > 0)
     {
-        recv_time = get_timeval();
         packet_node = read_packet_message(recv_buffer, packet_len,
-            g_ping_stats.rtt_info.packet_list, recv_time);
+            g_ping_stats.rtt_info.packet_list, get_timeval());
         if (packet_node != NULL)
         {
-            packet_node->recv_time = recv_time;
             update_rtt_info(&g_ping_stats.rtt_info, packet_node->send_time,
                 packet_node->recv_time);
             g_ping_stats.packet_recv_nbr++;
@@ -394,14 +399,9 @@ void send_icmp_packet(int sockfd, struct sockaddr *dest_addr,
         sizeof(packet_buffer), 0, dest_addr, dest_addr_len);
     if (sendto_status)
     {
-        if (sendto_status == SOCKET_ERROR && errno == ETIMEDOUT)
-            printf("Request timeout for icmp_seq %d\n", seq);
-        else
-        {
-            add_packet_node(&g_ping_stats.rtt_info.packet_list,
-                send_time, (struct timeval){0, 0}, seq);
-            g_ping_stats.packet_sent_nbr++;
-        }
+        add_packet_node(&g_ping_stats.rtt_info.packet_list,
+            send_time, (struct timeval){0, 0}, seq);
+        g_ping_stats.packet_sent_nbr++;
     }
 }
 
@@ -466,12 +466,13 @@ void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int
             send_icmp_packet(sockfd, dest_addr, dest_addr_len, packet_len, seq);
             g_ping_stats.sending_status = false;
             seq++;
+            receive_icmp_packet(sockfd, packet_len);
             alarm(g_ping_stats.specs.interval);
         }
-        receive_icmp_packet(sockfd, packet_len);
+        check_err_msg(sockfd, packet_len);
         if (g_ping_stats.specs.options & C_OPTION && seq == g_ping_stats.specs.max_packet)
             print_ping_statistics(0);
-        usleep(42);
+        usleep(100);
     }
 }
 
@@ -601,6 +602,25 @@ void init_ping(void)
     g_ping_stats.specs.packet_size = DEFAUL_TPACKET_SIZE;
     g_ping_stats.specs.interval = DEFAULT_INTERVAL;
     g_ping_stats.specs.ttl = DEFAULT_TTL;
+    g_ping_stats.specs.hold_err = true;
+}
+
+void set_socket_opt(int sockfd)
+{
+    bool socketfail;
+
+    socketfail = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO,
+        (void *)&g_ping_stats.specs.timeout, sizeof(g_ping_stats.specs.timeout));
+    if (socketfail)
+        handle_error("ping: Internal error", 1);
+    socketfail = setsockopt(sockfd, SOL_IP, IP_RECVERR,
+        (char *)&g_ping_stats.specs.hold_err, sizeof(g_ping_stats.specs.hold_err));
+    if (socketfail)
+        handle_error("ping: Internal error", 1);
+    socketfail = setsockopt(sockfd, IPPROTO_IP, IP_TTL,
+        (void *)&g_ping_stats.specs.ttl, sizeof(g_ping_stats.specs.ttl));
+    if (socketfail)
+        handle_error("ping: Internal error", 1);
 }
 
 void start_connection(struct addrinfo *dest_addrinfo)
@@ -616,13 +636,7 @@ void start_connection(struct addrinfo *dest_addrinfo)
     socket_address_in = (struct sockaddr_in *)socket_address;
     if (socket_address == NULL)
         handle_error("ping: Error establishing connection", 1);
-
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO,
-        (void *)&g_ping_stats.specs.timeout, sizeof(g_ping_stats.specs.timeout));
-    int hold = 1;
-    setsockopt(sockfd, SOL_IP, IP_RECVERR, (char *)&hold, sizeof(hold));
-    setsockopt(sockfd, IPPROTO_IP, IP_TTL,
-        (void *)&g_ping_stats.specs.ttl, sizeof(g_ping_stats.specs.ttl));
+    set_socket_opt(sockfd);
     inet_ntop(dest_addrinfo->ai_family, &socket_address_in->sin_addr, g_ping_stats.specs.resolved_hostname_ip,
         sizeof(g_ping_stats.specs.resolved_hostname_ip));
     getnameinfo(dest_addrinfo->ai_addr, dest_addrinfo->ai_addrlen,
