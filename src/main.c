@@ -85,9 +85,9 @@ void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
     icmp_header = (struct icmp *)packet_buffer;
     icmp_header->icmp_type = ICMP_ECHO;
     icmp_header->icmp_code = 0;
-    icmp_header->icmp_seq = seq;
-    icmp_header->icmp_id = (uint16_t)getpid();
-    icmp_header->icmp_cksum = checksum((uint16_t *)packet_buffer, packet_len);
+    icmp_header->icmp_seq = my_htons(seq);
+    icmp_header->icmp_id = my_htons(getpid());
+    icmp_header->icmp_cksum = checksum((uint16_t *)packet_buffer, packet_len + ICMP_HDR_LEN);
 }
 
 struct timeval get_timeval()
@@ -129,7 +129,7 @@ void print_packet_recipe(struct ip* ip_header, struct icmp *icmp_header, float t
     else
         printf("%d bytes from %s", my_ntohs(ip_header->ip_len) - (ip_header->ip_hl << 2),
             g_ping_stats.specs.resolved_hostname_ip);
-    printf(" icmp=%d ttl=%d time=%.3f ms\n", icmp_header->icmp_seq, ip_header->ip_ttl,time_diff);
+    printf(" icmp=%d ttl=%d time=%.3f ms\n", my_ntohs(icmp_header->icmp_seq), ip_header->ip_ttl,time_diff);
 }
 
 void print_ip_hdr(struct ip* ip_hdr)
@@ -223,14 +223,14 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
 
 void print_hdr_errors(struct icmp*icmp_hdr, struct ip*ip_hdr)
 {
-    if (checksum((uint16_t *)icmp_hdr, ip_hdr->ip_len) != 0)
+    int cc = my_ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl << 2);
+    if (checksum((uint16_t *)icmp_hdr, cc) != 0)
         printf("(BAD CHECKSUM)\n");
     else
         icmphdr_errors(icmp_hdr->icmp_type, icmp_hdr->icmp_code, ip_hdr);
 }
 
-t_packet_node *read_packet_message(void *message_buffer, int original_packet_len,
-    t_packet_node *packet_list, struct timeval recv_time)
+t_packet_node *read_packet_message(void *message_buffer, t_packet_node *packet_list, struct timeval recv_time)
 {
     struct ip       *ip_hdr;
     struct icmp     *icmp_hdr;
@@ -238,9 +238,9 @@ t_packet_node *read_packet_message(void *message_buffer, int original_packet_len
 
     ip_hdr = (struct ip *)message_buffer;
     icmp_hdr = (struct icmp *)(message_buffer + (ip_hdr->ip_hl << 2));
-    if (icmp_hdr->icmp_id != (uint16_t)getpid())
+    if (my_ntohs(icmp_hdr->icmp_id) != getpid())
         return NULL;
-    packet_node = get_packet_node(packet_list, icmp_hdr->icmp_seq);
+    packet_node = get_packet_node(packet_list, my_ntohs(icmp_hdr->icmp_seq));
     if (!packet_node->rtt)
     {
         packet_node->recv_time = recv_time;
@@ -270,14 +270,14 @@ void update_rtt_info(t_rtt_info *rtt_info, struct timeval start_time, struct tim
         rtt_info->rtt_max = new_rtt;
 }
 
-int get_icmp_seq(void *message_buffer)
+int16_t get_icmp_seq(void *message_buffer)
 {
     struct ip       *ip_hdr;
     struct icmp     *icmp_hdr;
     
     ip_hdr = (struct ip *)message_buffer;
     icmp_hdr = (struct icmp*)(message_buffer + (ip_hdr->ip_hl  <<  2));
-    return icmp_hdr->icmp_seq;    
+    return my_ntohs(icmp_hdr->icmp_seq);    
 }
 
 float newtonian_sqrt(float x, float precision)
@@ -317,14 +317,16 @@ t_msg_data create_message_header(void* message_buffer, int message_len,
 }
 
 
-void check_err_msg(int sockfd, int packet_len)
+void check_err_msg(int sockfd)
 {
-    char                        recv_buffer[ICMP_HDR_LEN + IP_HDR_LEN + packet_len];
-    char                        control_buffer[1024];
+    char                        recv_buffer[C_DATA_LEN];
+    char                        control_buffer[C_DATA_LEN];
     t_msg_data                  err_msg;
     int                         control_bytes;
     t_cmsg_info                 cmsg_info;
 
+    memset(recv_buffer, 0, sizeof(recv_buffer));
+    memset(control_buffer, 0, sizeof(control_buffer));
     err_msg = create_message_header(recv_buffer, sizeof(recv_buffer),
         control_buffer, sizeof(control_buffer));
     control_bytes = recvmsg(sockfd, &err_msg.msg_hdr, MSG_DONTWAIT | MSG_ERRQUEUE);
@@ -347,14 +349,16 @@ void check_err_msg(int sockfd, int packet_len)
 }
 
 
-void receive_icmp_packet(int sockfd, int packet_len)
+void receive_icmp_packet(int sockfd)
 {
-    char                    recv_buffer[ICMP_HDR_LEN + IP_HDR_LEN + packet_len];
+    char                    recv_buffer[C_DATA_LEN];
     char                    control_buffer[C_DATA_LEN];
     t_msg_data              re_msg;
     t_packet_node           *packet_node;
     int                     message_bytes;
 
+    memset(recv_buffer, 0, sizeof(recv_buffer));
+    memset(control_buffer, 0, sizeof(control_buffer));
     re_msg = create_message_header(recv_buffer, sizeof(recv_buffer), 
             control_buffer, sizeof(control_buffer));
     message_bytes = recvmsg(sockfd, &re_msg.msg_hdr, MSG_WAITALL);
@@ -362,7 +366,7 @@ void receive_icmp_packet(int sockfd, int packet_len)
         printf("Request timeout for icmp_seq %d\n", g_ping_stats.packet_sent_nbr - 1);     
     if (message_bytes > 0)
     {
-        packet_node = read_packet_message(recv_buffer, packet_len,
+        packet_node = read_packet_message(recv_buffer,
             g_ping_stats.rtt_info.packet_list, get_timeval());
         if (packet_node != NULL)
         {
@@ -482,15 +486,15 @@ void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int
         if (g_ping_stats.sending_status)
         {
             send_icmp_packet(sockfd, dest_addr, dest_addr_len, packet_len, seq);
+            receive_icmp_packet(sockfd);
+            alarm(g_ping_stats.specs.interval);
             g_ping_stats.sending_status = false;
             seq++;
-            receive_icmp_packet(sockfd, packet_len);
-            alarm(g_ping_stats.specs.interval);
         }
-        check_err_msg(sockfd, packet_len);
+        check_err_msg(sockfd);
         if (g_ping_stats.specs.options & C_OPTION && seq == g_ping_stats.specs.max_packet)
             print_ping_statistics(0);
-        usleep(100);
+        usleep(42);
     }
 }
 

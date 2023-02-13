@@ -28,7 +28,9 @@
 #define MAX_PACKET_SIZE 65527
 
 #define DEFAULT_TTL 64
-#define DEFAULT_TIMEOUT_SEC 1
+
+#define DEFAULT_TIMEOUT_SEC 4
+
 #define DEFAULT_INTERVAL 1
 #define DEFAULT_TTL 64
 #define DEFAUL_TPACKET_SIZE 56
@@ -123,8 +125,7 @@ void                    handle_error(char *msg, short exit_code);
 void                    ping_routine(int sockfd, struct sockaddr *dest_addr,
                             int dest_addr_len, int packet_len);
 
-t_packet_node           *read_packet_message(void *message_buffer, int original_packet_len,
-                            t_packet_node *packet_list, struct timeval recv_time);
+t_packet_node           *read_packet_message(void *message_buffer, t_packet_node *packet_list, struct timeval recv_time);
 
 
 t_packet_node           *get_packet_node(t_packet_node *packet_list, int seq);
