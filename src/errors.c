@@ -97,6 +97,9 @@ void get_hdr_errors(struct icmp* icmp_hdr, struct ip* ip_hdr)
     int cc;
 
     cc = my_ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl << 2);
+
+    if (cc < 8)
+        printf("packet too short");
     if (in_cksum((uint16_t *)icmp_hdr, cc) != 0)
         printf("(BAD CHECKSUM)\n");
     else

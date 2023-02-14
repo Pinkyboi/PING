@@ -4,7 +4,8 @@ NAME = ft_ping
 CC = gcc
 
 
-CFLAGS = -Wall -Werror -Wextra
+# CFLAGS = -Wall -Werror -Wextra
+CFLAGS = 
 
 SRC_PATH = ./src
 OBJ_PATH = ./obj

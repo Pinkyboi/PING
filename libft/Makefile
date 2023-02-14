@@ -88,7 +88,7 @@ all: $(LIB_NAME)
 $(LIB_NAME): $(OBJ)
 	@ar cr $@ $^
 
-$(OBJ_PATH)/%.o: $(SRC_PATH)/%.c $(HDR)| $(OBJ_PATH)
+$(OBJ_PATH)/%.o : $(SRC_PATH)/%.c $(HDR)| $(OBJ_PATH)
 	@$(CC) $(CFLAGS) $(INC) -c $< -o $@
 
 $(OBJ_PATH):
