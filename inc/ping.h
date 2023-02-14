@@ -1,6 +1,7 @@
 #ifndef __PING_H__
 #define __PING_H__
 
+#include "libft.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +20,7 @@
 
 #define ICMP_HDR_LEN 8
 #define IP_HDR_LEN 20
-#define C_DATA_LEN 521
+#define C_DATA_LEN 10240
 
 #define MAX_TTL 1024
 #define MAX_TIMEOUT 2147483
@@ -108,9 +109,11 @@ typedef struct      s_ping_stats
     struct timeval  start_time;
     t_rtt_info      rtt_info;
     t_ping_spec     specs;
+    char            recv_buffer[C_DATA_LEN];
+    char            control_buffer[C_DATA_LEN];
 }                   t_ping_stats;
 
-
+extern t_ping_stats g_ping_stats;
 
 struct sockaddr*        get_sockaddr(struct addrinfo *addrinfo);
 struct sockaddr_in*     get_sockaddr_in(struct in_addr addr);
@@ -129,12 +132,30 @@ t_packet_node           *read_packet_message(void *message_buffer, t_packet_node
 
 
 t_packet_node           *get_packet_node(t_packet_node *packet_list, int seq);
-uint16_t                checksum(uint16_t *buff, ssize_t size);
+uint16_t                in_cksum(uint16_t *buff, ssize_t size);
 int                     get_socketfd(int domain, int type, int protocol);
 float                   get_time_diff(struct timeval start, struct timeval end);
 
 
 
-float pow_2(float x);
-float newtonian_sqrt(float x, float precision);
+float                   pow_2(float x);
+float                   newtonian_sqrt(float x, float precision);
+float                   fractional_percentage(float numerator, float denominator);
+
+
+t_msg_data              create_message_header(void* message_buffer, int message_len,
+                            void *control_buffer, int control_len);
+void                    create_icmp_header(char *packet_buffer, int packet_len, int seq);
+
+struct timeval          get_timeval();
+float                   get_time_diff(struct timeval start, struct timeval end);
+
+void                    icmphdr_errors(int type, int code, struct ip* ip_hdr);
+void                    get_hdr_errors(struct icmp* icmp_hdr, struct ip* ip_hdr);
+void                    handle_error(char *msg, short exit_code);
+
+
+uint16_t                my_ntohs(int16_t nshort);
+uint16_t                my_htons(int16_t nshort);
+uint16_t                in_cksum(uint16_t *buff, ssize_t size);
 #endif

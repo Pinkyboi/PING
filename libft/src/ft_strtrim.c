@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   ft_strtrim.c                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: abenaiss <marvin@42.fr>                    +#+  +:+       +#+        */
+/*   By: abenaiss <abenaiss@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2018/10/10 21:28:57 by abenaiss          #+#    #+#             */
-/*   Updated: 2018/10/10 21:29:01 by abenaiss         ###   ########.fr       */
+/*   Updated: 2023/02/14 10:13:53 by abenaiss         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,11 +18,9 @@ char	*ft_strtrim(char const *s)
 	size_t	i;
 	size_t	len_s;
 	char	*t;
-	size_t	j;
 
 	if (!s)
 		return (NULL);
-	j = 0;
 	i = 0;
 	len_s = ft_strlen(s);
 	while (*s && (s[i] == ' ' || s[i] == '\n' || s[i] == '\t'))

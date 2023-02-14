@@ -2,43 +2,6 @@
 
 t_ping_stats    g_ping_stats;
 
-uint16_t my_ntohs(int16_t nshort)
-{
-    #if __BYTE_ORDER == __LITTLE_ENDIAN
-        return ((((nshort) & 0xFF00) >> 8) | (((nshort) & 0x00FF) << 8));
-    #else
-        return nshort;
-    #endif
-}
-
-uint16_t my_htons(int16_t nshort)
-{
-    #if __BYTE_ORDER == __LITTLE_ENDIAN
-        return ((((nshort) & 0x00FF) << 8) | (((nshort) & 0xFF00) >> 8));
-    #else
-        return nshort;
-    #endif
-}
-
-uint16_t checksum(uint16_t *buff, ssize_t size)
-{
-    int count = size;
-    uint32_t checksum = 0;
-
-    while (count > 1)
-    {
-        checksum += *(buff++);
-        count -= 2;
-    }
-    if (count)
-        checksum += *(uint8_t *)buff;
-
-    checksum = (checksum & 0xffff) + (checksum >> 16);
-    checksum += (checksum >> 16);
-
-    return ~checksum;
-}
-
 struct addrinfo *get_first_valid_addrinfo(struct addrinfo *server_result)
 {
     for (struct addrinfo *p = server_result; p != NULL; p = p->ai_next)
@@ -57,50 +20,6 @@ struct addrinfo *get_first_valid_addrinfo(struct addrinfo *server_result)
             return p;
     }
     return NULL;
-}
-
-void handle_error(char *msg, short exit_code)
-{
-    if (errno)
-        printf("%s: %s\n", msg, strerror(errno));
-    else
-        printf("%s\n", msg);
-    exit(exit_code);
-}
-
-struct sockaddr_in* get_sockaddr_in(struct in_addr addr)
-{
-    struct sockaddr_in *sock_addr;
-
-    sock_addr = (struct sockaddr_in *)calloc(sizeof(struct sockaddr_in), 1);
-    sock_addr->sin_family = AF_INET;
-    sock_addr->sin_addr = addr;
-    return sock_addr;
-}
-
-void fill_icmp_packet(char *packet_buffer, int packet_len, int seq)
-{
-    struct icmp *icmp_header;
-
-    icmp_header = (struct icmp *)packet_buffer;
-    icmp_header->icmp_type = ICMP_ECHO;
-    icmp_header->icmp_code = 0;
-    icmp_header->icmp_seq = my_htons(seq);
-    icmp_header->icmp_id = my_htons(getpid());
-    icmp_header->icmp_cksum = checksum((uint16_t *)packet_buffer, packet_len + ICMP_HDR_LEN);
-}
-
-struct timeval get_timeval()
-{
-    struct timeval tv;
-
-    gettimeofday(&tv, NULL);
-    return tv;
-}
-
-float get_time_diff(struct timeval start, struct timeval end)
-{
-    return (end.tv_sec - start.tv_sec) * 1000.0f + (end.tv_usec - start.tv_usec) / 1000.0f;
 }
 
 float get_standard_deviation_rtt(t_packet_node *packet_list, float average_rtt)
@@ -132,105 +51,8 @@ void print_packet_recipe(struct ip* ip_header, struct icmp *icmp_header, float t
     printf(" icmp=%d ttl=%d time=%.3f ms\n", my_ntohs(icmp_header->icmp_seq), ip_header->ip_ttl,time_diff);
 }
 
-void print_ip_hdr(struct ip* ip_hdr)
-{
-    return;
-}
-
-void icmphdr_errors(int type, int code, struct ip* ip_hdr)
-{
-
-    if (type == ICMP_ECHOREPLY)
-    {
-        if (code == ICMP_UNREACH_NET)
-            printf("Destination Net Unreachable\n");
-        else if (code == ICMP_UNREACH_HOST)
-            printf("Destination Host Unreachable\n");
-        else if (code == ICMP_UNREACH_PROTOCOL)
-            printf("Destination Protocol Unreachable\n");
-        else if (code == ICMP_UNREACH_PORT)
-            printf("Destination Port Unreachable\n");
-        else if (code == ICMP_UNREACH_NEEDFRAG)
-            printf("Fragmentation Needed and DF Set\n");
-        else if (code == ICMP_UNREACH_SRCFAIL)
-            printf("Source Route Failed\n");
-        else if (code == ICMP_UNREACH_NET_UNKNOWN)
-            printf("Destination Network Unknown\n");
-        else if (code == ICMP_UNREACH_HOST_UNKNOWN)
-            printf("Destination Host Unknown\n");
-        else if (code == ICMP_UNREACH_ISOLATED)
-            printf("Source Host Isolated\n");
-        else if (code == ICMP_UNREACH_NET_PROHIB)
-            printf("Communication with Destination Network is Administratively Prohibited\n");
-        else if (code == ICMP_UNREACH_HOST_PROHIB)
-            printf("Communication with Destination Host is Administratively Prohibited\n");
-        else if (code == ICMP_UNREACH_TOSNET)
-            printf("Destination Network Unreachable for Type of Service\n");
-        else if (code == ICMP_UNREACH_TOSHOST)
-            printf("Destination Host Unreachable for Type of Service\n");
-        else if (code == ICMP_UNREACH_FILTER_PROHIB)
-            printf("Communication Administratively Prohibited\n");
-        else if (code == ICMP_UNREACH_HOST_PRECEDENCE)
-            printf("Host Precedence Violation\n");
-        else if (code == ICMP_UNREACH_PRECEDENCE_CUTOFF)
-            printf("Precedence cutoff in effect\n");
-        else
-        {
-            printf("Destination Unreachable, Bad Code %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
-                print_ip_hdr(ip_hdr);
-        }
-    }
-    else if (type == ICMP_TIMXCEED)
-    {
-        if (code == ICMP_TIMXCEED_INTRANS)
-            printf("Time to Live Exceeded in Transit\n");
-        else if (code == ICMP_TIMXCEED_REASS)
-            printf("Fragment Reassembly Time Exceeded\n");
-        else
-        {
-            printf("Time Exceeded, Bad Code %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
-                print_ip_hdr(ip_hdr);
-        }
-    }
-    else if (type == ICMP_SOURCEQUENCH)
-        printf("Source Quench\n");
-    else if (type == ICMP_PARAMPROB)
-        printf("Parameter Problem\n");
-    else if (type == ICMP_REDIRECT)
-    {
-        if (code == ICMP_REDIRECT_NET)
-            printf("Redirect Datagram for the Network\n");
-        else if (code == ICMP_REDIRECT_HOST)
-            printf("Redirect Datagram for the Host\n");
-        else if (code == ICMP_REDIRECT_TOSNET)
-            printf("Redirect Datagram for the Type of Service and Network\n");
-        else
-        {
-            printf("Redirect, Bad Code: %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
-                print_ip_hdr(ip_hdr);
-        }
-    }
-    else
-    {
-        printf("Bad ICMP type: %d\n", type);
-        if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
-            print_ip_hdr(ip_hdr);
-    }
-}
-
-void print_hdr_errors(struct icmp*icmp_hdr, struct ip*ip_hdr)
-{
-    int cc = my_ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl << 2);
-    if (checksum((uint16_t *)icmp_hdr, cc) != 0)
-        printf("(BAD CHECKSUM)\n");
-    else
-        icmphdr_errors(icmp_hdr->icmp_type, icmp_hdr->icmp_code, ip_hdr);
-}
-
-t_packet_node *read_packet_message(void *message_buffer, t_packet_node *packet_list, struct timeval recv_time)
+t_packet_node *read_packet_message(void *message_buffer, t_packet_node *packet_list,
+    struct timeval recv_time)
 {
     struct ip       *ip_hdr;
     struct icmp     *icmp_hdr;
@@ -280,43 +102,6 @@ int16_t get_icmp_seq(void *message_buffer)
     return my_ntohs(icmp_hdr->icmp_seq);    
 }
 
-float newtonian_sqrt(float x, float precision)
-{
-    float   guess;
-    float   guess_squared;
-    float   new_guess;
-
-    guess = x / 2;
-    guess_squared = guess * guess;
-    while (guess_squared - x > precision || x - guess_squared > precision)
-    {
-        new_guess = (guess + x / guess) / 2;
-        guess = new_guess;
-        guess_squared = guess * guess;
-    }
-    return guess;
-}
-
-float pow_2(float x)
-{
-    return x * x;
-}
-
-t_msg_data create_message_header(void* message_buffer, int message_len,
-    void *control_buffer, int control_len)
-{
-    t_msg_data msg;
-
-    msg.msg_iov.iov_base = message_buffer;
-    msg.msg_hdr.msg_iov = &msg.msg_iov;
-    msg.msg_iov.iov_len = message_len;
-    msg.msg_hdr.msg_iovlen = 1;
-    msg.msg_hdr.msg_control = control_buffer;
-    msg.msg_hdr.msg_controllen = control_len;
-    return msg;
-}
-
-
 void check_err_msg(int sockfd)
 {
     char                        recv_buffer[C_DATA_LEN];
@@ -325,8 +110,6 @@ void check_err_msg(int sockfd)
     int                         control_bytes;
     t_cmsg_info                 cmsg_info;
 
-    memset(recv_buffer, 0, sizeof(recv_buffer));
-    memset(control_buffer, 0, sizeof(control_buffer));
     err_msg = create_message_header(recv_buffer, sizeof(recv_buffer),
         control_buffer, sizeof(control_buffer));
     control_bytes = recvmsg(sockfd, &err_msg.msg_hdr, MSG_DONTWAIT | MSG_ERRQUEUE);
@@ -357,8 +140,6 @@ void receive_icmp_packet(int sockfd)
     t_packet_node           *packet_node;
     int                     message_bytes;
 
-    memset(recv_buffer, 0, sizeof(recv_buffer));
-    memset(control_buffer, 0, sizeof(control_buffer));
     re_msg = create_message_header(recv_buffer, sizeof(recv_buffer), 
             control_buffer, sizeof(control_buffer));
     message_bytes = recvmsg(sockfd, &re_msg.msg_hdr, MSG_WAITALL);
@@ -381,7 +162,6 @@ void add_packet_node(t_packet_node **packet_list, struct timeval send_time,
     struct timeval recv_time, int seq)
 {
     t_packet_node *new_node;
-    float         rtt;
 
     new_node = (t_packet_node *)malloc(sizeof(t_packet_node));
     new_node->seq = seq;
@@ -415,7 +195,7 @@ void send_icmp_packet(int sockfd, struct sockaddr *dest_addr,
     int8_t          sendto_status;
 
     memset(packet_buffer, 0, sizeof(packet_buffer));
-    fill_icmp_packet(packet_buffer, packet_len, seq);
+    create_icmp_header(packet_buffer, packet_len, seq);
     send_time = get_timeval();
     sendto_status = sendto(sockfd, packet_buffer,
         sizeof(packet_buffer), 0, dest_addr, dest_addr_len);
@@ -427,30 +207,37 @@ void send_icmp_packet(int sockfd, struct sockaddr *dest_addr,
     }
 }
 
-float fractional_percentage(float numerator, float denominator)
-{
-    return (numerator / denominator) * 100.0;
-}
-
 void unlock_sending(int signum)
 {
+    (void)signum;
     g_ping_stats.sending_status = true;
 }
 
 void print_rtt_infos(int signnum)
 {
-    t_rtt_info rtt_info = g_ping_stats.rtt_info;
-    float average_rtt = rtt_info.rtt_sum / rtt_info.rtt_count;
-    float standard_deviation_rtt = get_standard_deviation_rtt(rtt_info.packet_list, average_rtt);
+    t_rtt_info  rtt_info;
+    float       average_rtt;
+    float       standard_deviation_rtt;
 
+    (void)signnum;
+    rtt_info = g_ping_stats.rtt_info;
+    average_rtt = rtt_info.rtt_sum / rtt_info.rtt_count;
+    standard_deviation_rtt = get_standard_deviation_rtt(rtt_info.packet_list, average_rtt);
     printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n",
         rtt_info.rtt_min, average_rtt, rtt_info.rtt_max, standard_deviation_rtt);
 }
-void print_packet_statistics(int packet_sent_nbr, int packet_recv_nbr)
+void print_packet_statistics(int signnum)
 {
-    float packet_lost = fractional_percentage(packet_sent_nbr - packet_recv_nbr, packet_sent_nbr);
-    float time_passed = get_time_diff(g_ping_stats.start_time, get_timeval());
+    int packet_sent_nbr;
+    int packet_recv_nbr;
+    float packet_lost;
+    float time_passed;
 
+    (void)signnum;
+    packet_sent_nbr = g_ping_stats.packet_sent_nbr;
+    packet_recv_nbr = g_ping_stats.packet_recv_nbr;
+    packet_lost = fractional_percentage(packet_sent_nbr - packet_recv_nbr, packet_sent_nbr);
+    time_passed = get_time_diff(g_ping_stats.start_time, get_timeval());
     printf("%d packets transmitted, %d packets received, %.1f%% packet loss, time %.3fms\n",
             packet_sent_nbr, packet_recv_nbr, packet_lost, time_passed);
 }
@@ -458,7 +245,7 @@ void print_packet_statistics(int packet_sent_nbr, int packet_recv_nbr)
 void print_ping_statistics(int signnum)
 {
     printf("\n--- %s ping statistics ---\n", g_ping_stats.specs.unresolved_hostname);
-    print_packet_statistics(g_ping_stats.packet_sent_nbr, g_ping_stats.packet_recv_nbr);
+    print_packet_statistics(signnum);
     if (g_ping_stats.packet_recv_nbr)
         print_rtt_infos(signnum);
     exit(0);
@@ -481,15 +268,16 @@ void ping_routine(int sockfd, struct sockaddr *dest_addr, int dest_addr_len, int
     print_ping_header();
     signal(SIGALRM, unlock_sending);
     signal(SIGINT, print_ping_statistics);
+    signal(SIGQUIT, print_packet_statistics);
     while (true)
     {
         if (g_ping_stats.sending_status)
         {
             send_icmp_packet(sockfd, dest_addr, dest_addr_len, packet_len, seq);
             receive_icmp_packet(sockfd);
-            alarm(g_ping_stats.specs.interval);
             g_ping_stats.sending_status = false;
             seq++;
+            alarm(g_ping_stats.specs.interval);
         }
         check_err_msg(sockfd);
         if (g_ping_stats.specs.options & C_OPTION && seq == g_ping_stats.specs.max_packet)
@@ -600,7 +388,6 @@ void get_ping_options(char **prog_arg)
         i += step;
     }
 }
-
 
 void init_ping(void)
 {
