@@ -1,8 +1,8 @@
-#include "ping.h"
+#include "ft_ping.h"
 
 uint16_t my_ntohs(int16_t nshort)
 {
-    #if __BYTE_ORDER == __LITTLE_ENDIAN
+    #if BYTE_ORDER == LITTLE_ENDIAN
         return ((((nshort) & 0xFF00) >> 8) | (((nshort) & 0x00FF) << 8));
     #else
         return nshort;
@@ -11,14 +11,14 @@ uint16_t my_ntohs(int16_t nshort)
 
 uint16_t my_htons(int16_t nshort)
 {
-    #if __BYTE_ORDER == __LITTLE_ENDIAN
+    #if BYTE_ORDER == LITTLE_ENDIAN
         return ((((nshort) & 0x00FF) << 8) | (((nshort) & 0xFF00) >> 8));
     #else
         return nshort;
     #endif
 }
 
-uint16_t in_cksum(uint16_t *buff, ssize_t size)
+uint16_t in_cksum(uint16_t *buff, uint16_t size)
 {
     int count = size;
     uint32_t checksum = 0;

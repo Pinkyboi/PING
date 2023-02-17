@@ -86,7 +86,7 @@ INC = -I $(INC_PATH)
 all: $(LIB_NAME)
 
 $(LIB_NAME): $(OBJ)
-	@ar cr $@ $^
+	@ar rc $@ $^
 
 $(OBJ_PATH)/%.o : $(SRC_PATH)/%.c $(HDR)| $(OBJ_PATH)
 	@$(CC) $(CFLAGS) $(INC) -c $< -o $@

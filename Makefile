@@ -4,8 +4,8 @@ NAME = ft_ping
 CC = gcc
 
 
-# CFLAGS = -Wall -Werror -Wextra
-CFLAGS = 
+CFLAGS = -Wall -Werror -Wextra
+# CFLAGS = 
 
 SRC_PATH = ./src
 OBJ_PATH = ./obj
@@ -14,13 +14,17 @@ INC_PATH = ./inc
 LIBFT_PATH = ./libft
 LIBFT_INC = $(addprefix $(LIBFT_PATH)/, inc)
 
-HDR_FILES = ping.h
+HDR_FILES = ft_ping.h
+
 SRC_FILES = main.c\
-			create_hdrs.c\
-			errors.c\
-			maths.c\
-			net_tools.c\
+			ntools.c\
+			options.c\
 			time.c\
+			errors.c\
+			send.c\
+			recv.c\
+			address.c\
+			rtt.c
 
 OBJ_FILES = $(SRC_FILES:.c=.o)
 

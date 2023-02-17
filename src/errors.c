@@ -1,6 +1,4 @@
-#include "ping.h"
-
-extern t_ping_stats g_ping_stats;
+#include "ft_ping.h"
 
 static void print_ip_hdr(struct ip* ip_hdr)
 {
@@ -8,7 +6,7 @@ static void print_ip_hdr(struct ip* ip_hdr)
     return;
 }
 
-void icmphdr_errors(int type, int code, struct ip* ip_hdr)
+void print_icmp_err(int type, int code, struct ip* ip_hdr)
 {
 
     if (type == ICMP_ECHOREPLY)
@@ -48,20 +46,20 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
         else
         {
             printf("Destination Unreachable, Bad Code %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_env.spec.opts & OPT_VERBOSE)
                 print_ip_hdr(ip_hdr);
         }
     }
     else if (type == ICMP_TIMXCEED)
     {
         if (code == ICMP_TIMXCEED_INTRANS)
-            printf("Time to Live Exceeded in Transit\n");
+            printf("Time to Live Exceeded\n");
         else if (code == ICMP_TIMXCEED_REASS)
-            printf("Fragment Reassembly Time Exceeded\n");
+            printf("Fragment Reassembly Time exceeded\n");
         else
         {
             printf("Time Exceeded, Bad Code %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_env.spec.opts & OPT_VERBOSE)
                 print_ip_hdr(ip_hdr);
         }
     }
@@ -80,37 +78,28 @@ void icmphdr_errors(int type, int code, struct ip* ip_hdr)
         else
         {
             printf("Redirect, Bad Code: %d\n", code);
-            if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
+            if (ip_hdr && g_ping_env.spec.opts & OPT_VERBOSE)
                 print_ip_hdr(ip_hdr);
         }
     }
     else
     {
         printf("Bad ICMP type: %d\n", type);
-        if (ip_hdr && g_ping_stats.specs.options & V_OPTION)
+        if (ip_hdr && g_ping_env.spec.opts & OPT_VERBOSE)
             print_ip_hdr(ip_hdr);
     }
 }
 
-void get_hdr_errors(struct icmp* icmp_hdr, struct ip* ip_hdr)
+void error(uint8_t code, int err, char *err_format, ...)
 {
-    int cc;
+    va_list args;
 
-    cc = my_ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl << 2);
-
-    if (cc < 8)
-        printf("packet too short");
-    if (in_cksum((uint16_t *)icmp_hdr, cc) != 0)
-        printf("(BAD CHECKSUM)\n");
-    else
-        icmphdr_errors(icmp_hdr->icmp_type, icmp_hdr->icmp_code, ip_hdr);
-}
-
-void handle_error(char *msg, short exit_code)
-{
-    if (errno)
-        printf("%s: %s\n", msg, strerror(errno));
-    else
-        printf("%s\n", msg);
-    exit(exit_code);
+    fprintf(stderr, "%s: ", PROGNAME);
+    va_start(args, err_format);
+    vfprintf(stderr, err_format, args);
+    if (err)
+        fprintf(stderr, ": %s", strerror(err));
+    va_end(args);
+    fprintf(stderr, "\n");
+    exit(code);
 }
