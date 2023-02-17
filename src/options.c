@@ -2,7 +2,7 @@
 #include "ft_ping.h"
 
 
-static int64_t atol_or_err(char *arg, char *err_msg, long min_value, long max_value)
+static int64_t strtol_or_err(char *arg, char *err_msg, long min_value, long max_value)
 {
     long num_arg;
     char *end_ptr = NULL;
@@ -56,10 +56,10 @@ void get_ping_opt(int argc, char **argv)
                 g_ping_env.spec.interval = secs;
                 break;
             case 's':
-                g_ping_env.spec.packetlen = atol_or_err(optarg, ERR_INVALID_ARG, 1, INT32_MAX);
+                g_ping_env.spec.packetlen = strtol_or_err(optarg, ERR_INVALID_ARG, 1, INT32_MAX);
                 break;
             case 't':
-                g_ping_env.spec.ttl = atol_or_err(optarg, ERR_INVALID_ARG, 1, MAXTTL);;
+                g_ping_env.spec.ttl = strtol_or_err(optarg, ERR_INVALID_ARG, 1, MAXTTL);;
                 break;
             case 'W':
                 secs = atof(optarg);
@@ -69,7 +69,7 @@ void get_ping_opt(int argc, char **argv)
                 break;
             case 'c':
                 g_ping_env.spec.opts |= OPT_NPACKET;
-                g_ping_env.spec.npacket = atol_or_err(optarg, ERR_INVALID_ARG, 1, INT64_MAX);
+                g_ping_env.spec.npacket = strtol_or_err(optarg, ERR_INVALID_ARG, 1, INT64_MAX);
                 break;
             default:
                     pingv4_usage();

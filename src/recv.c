@@ -19,9 +19,9 @@ static t_msg_data create_message_header(void* message_buffer, int message_len,
     return msg;
 }
 
-static void aknowledge(uint32_t seq)
+static void aknowledge(uint16_t seq)
 {
-    if (seq <= g_ping_env.send_infos.current_seq)
+    if (seq < g_ping_env.send_infos.current_seq)
         g_ping_env.send_infos.aknowledged = true;
 }
 
@@ -92,6 +92,7 @@ void print_err_response(uint16_t sequence, uint8_t type, uint8_t code, struct ip
 void parse_err_packet(struct sock_extended_err *err, uint16_t sequence)
 {
     struct in_addr              src_addr;
+
     src_addr = ((struct sockaddr_in *)SO_EE_OFFENDER(err))->sin_addr;
     resolve_ipv4_addr(src_addr);
     aknowledge(sequence); 
@@ -107,17 +108,19 @@ void read_err_msg(void)
 
     err_msg = create_message_header(&icmp_hdr, sizeof(icmp_hdr),
         control_buffer, sizeof(control_buffer));
-    recvmsg(g_ping_env.sockfd, &err_msg.msg_hdr, MSG_ERRQUEUE);
-    cmsg_info = (t_cmsg_info){.cmsg = CMSG_FIRSTHDR(&err_msg.msg_hdr)};
-    while (cmsg_info.cmsg)
+    if (recvmsg(g_ping_env.sockfd, &err_msg.msg_hdr, MSG_ERRQUEUE) > 0)
     {
-        if (cmsg_info.cmsg->cmsg_level == SOL_IP &&
-                cmsg_info.cmsg->cmsg_type == IP_RECVERR)
-            cmsg_info.error_ptr = (struct sock_extended_err *)CMSG_DATA(cmsg_info.cmsg);
-        cmsg_info.cmsg = CMSG_NXTHDR(&err_msg.msg_hdr, cmsg_info.cmsg);
+        cmsg_info = (t_cmsg_info){.cmsg = CMSG_FIRSTHDR(&err_msg.msg_hdr)};
+        while (cmsg_info.cmsg)
+        {
+            if (cmsg_info.cmsg->cmsg_level == SOL_IP &&
+                    cmsg_info.cmsg->cmsg_type == IP_RECVERR)
+                cmsg_info.error_ptr = (struct sock_extended_err *)CMSG_DATA(cmsg_info.cmsg);
+            cmsg_info.cmsg = CMSG_NXTHDR(&err_msg.msg_hdr, cmsg_info.cmsg);
+        }
+        if (cmsg_info.error_ptr)
+            parse_err_packet(cmsg_info.error_ptr, my_htons(icmp_hdr.icmp_seq));
     }
-    if (cmsg_info.error_ptr)
-        parse_err_packet(cmsg_info.error_ptr, my_htons(icmp_hdr.icmp_seq));
 }
 
 void receive_icmp_packet(void)
@@ -128,7 +131,7 @@ void receive_icmp_packet(void)
 
     re_msg = create_message_header(recv_buffer, sizeof(recv_buffer),
                                     NULL, 0);
-    message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, 0);
+    message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, MSG_WAITALL);
     if (message_bytes > 0)
         parse_icmp_packet(recv_buffer, message_bytes);
     else if (message_bytes < 0)

@@ -51,10 +51,10 @@ float add_packet_rtt(void *icmp_packet, int packetlen)
     float           time_diff;
 
     time_diff = 0;
-    if (packetlen - sizeof(struct icmp) > sizeof(struct timeval))
+    if ((unsigned long)(packetlen - ICMP_HDR_SIZE) > sizeof(struct timeval))
     {
 
-        time = (struct timeval *)((void *)icmp_packet + sizeof(struct icmp));
+        time = (struct timeval *)((void *)icmp_packet + ICMP_HDR_SIZE);
         time_diff = usec_time_diff(*time, get_timeval());
         update_rtt(time_diff);
     }

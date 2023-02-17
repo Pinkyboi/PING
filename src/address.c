@@ -30,7 +30,7 @@ void get_dest_addr(char *host_name)
                                 .ai_protocol = IPPROTO_ICMP};
     status = getaddrinfo(host_name, NULL, &hints, &server_result);
     if (status < 0)
-        error(2, 0, "%s : %s", gai_strerror(status));
+        error(2, 0, "%s : %s", host_name, gai_strerror(status));
     for (result_ptr = server_result; result_ptr != NULL; result_ptr = result_ptr->ai_next)
     {
         if (result_ptr->ai_family == AF_INET &&

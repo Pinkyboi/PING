@@ -11,7 +11,7 @@ t_ping_env g_ping_env = {
     },
     .send_infos = {
         .current_seq = 1,
-        .aknowledged = true,
+        .aknowledged = false,
         .stop = false
     },
 };
@@ -102,8 +102,11 @@ void handle_signal(int sig)
     if (sig == SIGINT)
         g_ping_env.send_infos.stop = true;
     if (sig == SIGALRM)
-        if (g_ping_env.send_infos.aknowledged)
-            send_icmp_packet();
+    {
+        send_icmp_packet();
+        alarm(g_ping_env.spec.interval);
+        g_ping_env.send_infos.aknowledged = false;
+    }
     if (sig == SIGQUIT)
         packet_statistics();
 }
@@ -111,8 +114,8 @@ void handle_signal(int sig)
 void ping_routine()
 {
     g_ping_env.rtt.s_time = get_timeval();
-    send_icmp_packet();
     print_ping_header();
+    handle_signal(SIGALRM);
     signal(SIGINT, handle_signal);
     signal(SIGALRM, handle_signal);
     signal(SIGQUIT, handle_signal);
@@ -122,11 +125,7 @@ void ping_routine()
             g_ping_env.spec.npacket == g_ping_env.send_infos.packet_recv)
             break;
         if (!g_ping_env.send_infos.aknowledged)
-        {
             receive_icmp_packet();
-            if(g_ping_env.send_infos.aknowledged)              
-                alarm(g_ping_env.spec.interval);
-        }
         usleep(10);
     }
     ping_statistics();

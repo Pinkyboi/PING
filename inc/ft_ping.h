@@ -31,7 +31,7 @@
 
 #define DEFAULT_PACKETLEN 56
 #define DEFAULT_TTL 64
-#define DEFAULT_TIMEOUT_SEC 1
+#define DEFAULT_TIMEOUT_SEC 4
 #define DEFAULT_INTERVAL 1
 
 #define LOSS_PERCENT(X, Y) (100.0 -((float)(X) / (float)(Y) * 100.0))
@@ -107,7 +107,7 @@ typedef struct          s_rtt_info
 
 typedef struct          t_sending_info
 {
-    uint32_t            current_seq;
+    uint16_t            current_seq;
     uint32_t            packet_sent;
     uint32_t            packet_recv;
     bool                aknowledged;
