@@ -23,18 +23,20 @@
 
 #define C_MAXPACKET 10240
 
-#define ICMP_HDR_SIZE 8
-#define IP_HDR_SIZE 20
-#define PACKET_SIZE ICMP_HDR_SIZE + g_ping_env.spec.packetlen
-
 #define ADDR_MAX_LEN 256
+
+#define ICMP_MAXDATA IP_MAXPACKET - 8
+
+#define IP_HDR_SIZE 20
+#define PACKET_SIZE ICMP_MINLEN + g_ping_env.spec.packetlen
+
 
 #define DEFAULT_PACKETLEN 56
 #define DEFAULT_TTL 64
 #define DEFAULT_TIMEOUT_SEC 4
 #define DEFAULT_INTERVAL 1
 
-#define LOSS_PERCENT(X, Y) (100.0 -((float)(X) / (float)(Y) * 100.0))
+#define LOSS_PERCENT(X, Y) (100.0 - ((float)(X) / (float)(Y) * 100.0))
 
 #define OPT_HELP        ((0x1) << 0)
 #define OPT_VERBOSE     ((0x1) << 1)
@@ -51,6 +53,11 @@
 #define ERR_RANGE_ARG_MSG   "invalid argument: '%s': out of range: %ld <= value <= %ld"
 #define ERR_HOST_UNFOUND    "%s: No address associated with hostname"
 #define ERR_INVALID_ARG     "invalid argument: '%s'"
+
+#define ERR_N_PACKET_SIZE   "illegal negative packet size %d.\n"
+#define ERR_L_PACKET_SIZE   "packet size too large: %d\n"
+
+
 typedef enum bool{
 
     false,
@@ -61,12 +68,13 @@ typedef enum bool{
 typedef struct s_ping_spec
 {
     u_int8_t        opts;
-    int             ttl;
     u_int32_t       packetlen;
     u_int64_t       npacket;
+    bool            holderr;
+    bool            timestamp;
+    int             ttl;
     float           interval;
     struct timeval  timeout;
-    bool            holderr;
 }               t_ping_spec; 
 
 typedef struct      s_msg_data
@@ -92,7 +100,7 @@ typedef struct          s_dest_info
 typedef struct          s_resolved_addr
 {
     char                full_addr[ADDR_MAX_LEN];
-    char                num_addr[INET6_ADDRSTRLEN];
+    char                num_addr[INET_ADDRSTRLEN];
 }                       t_resolved_addr;
 
 typedef struct          s_rtt_info
@@ -156,7 +164,7 @@ void                    get_dest_addr(char *host_name);
 float                   get_mdev_rtt(t_list *rtt_list, float avg_rtt);
 void                    rtt_statistics(void);
 void                    update_rtt(float rtt);
-float                   add_packet_rtt(void *icmp_packet, int packetlen);
+float                   add_packet_rtt(void *icmp_packet);
 
 // packet print
 void                    print_response_packet(int datalen, uint16_t sequence,

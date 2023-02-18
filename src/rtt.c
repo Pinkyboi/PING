@@ -45,16 +45,15 @@ void update_rtt(float rtt)
     g_ping_env.rtt.rtt_count++;
 }
 
-float add_packet_rtt(void *icmp_packet, int packetlen)
+float add_packet_rtt(void *icmp_packet)
 {
     struct timeval  *time;
     float           time_diff;
 
     time_diff = 0;
-    if ((unsigned long)(packetlen - ICMP_HDR_SIZE) > sizeof(struct timeval))
+    if (g_ping_env.spec.timestamp)
     {
-
-        time = (struct timeval *)((void *)icmp_packet + ICMP_HDR_SIZE);
+        time = (struct timeval *)((void *)icmp_packet + ICMP_MINLEN);
         time_diff = usec_time_diff(*time, get_timeval());
         update_rtt(time_diff);
     }

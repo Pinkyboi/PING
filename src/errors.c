@@ -22,7 +22,7 @@ static void print_ip_hdr(struct ip* ip_hdr)
     inet_ntop(AF_INET, &ip_hdr->ip_dst, dest_addr, sizeof(dest_addr));
 	printf(" %s ", dest_addr);
 	printf(" %s ", src_addr);
-	printf("\n");  
+	printf("\n");
 }
 
 void print_icmp_err(int type, int code, struct ip* ip_hdr)

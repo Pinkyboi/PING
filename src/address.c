@@ -9,13 +9,17 @@ void resolve_ipv4_addr(struct in_addr byte_address)
         .sin_addr = byte_address,
         .sin_family = AF_INET,
     };
+
     inet_ntop(host_sa.sin_family, &host_sa.sin_addr,
                     g_ping_env.last_resolved_addr.num_addr,
                     sizeof(g_ping_env.last_resolved_addr.num_addr));
-    getnameinfo((struct sockaddr *)&host_sa, sizeof(host_sa),
-                    g_ping_env.last_resolved_addr.full_addr,
-                    sizeof(g_ping_env.last_resolved_addr.full_addr),
-                    NULL, 0, 0);
+    if (!(g_ping_env.spec.opts & OPT_NUMERIC))
+    {
+        getnameinfo((struct sockaddr *)&host_sa, sizeof(host_sa),
+                        g_ping_env.last_resolved_addr.full_addr,
+                        sizeof(g_ping_env.last_resolved_addr.full_addr),
+                        NULL, 0, 0);
+    }
 }
 
 void get_dest_addr(char *host_name)

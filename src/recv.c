@@ -1,7 +1,5 @@
 #include "ft_ping.h"
 
-
-
 static t_msg_data create_message_header(void* message_buffer, int message_len,
                                     void *control_buffer, int control_len)
 {
@@ -25,49 +23,17 @@ static void aknowledge(uint16_t seq)
         g_ping_env.send_infos.aknowledged = true;
 }
 
-const char* get_corruption_msg(struct icmp *icmp_hdr, uint32_t icmp_len)
+static const char* get_corruption_msg(struct icmp *icmp_hdr, uint32_t icmp_len)
 {
-    if (icmp_len < ICMP_HDR_SIZE)
+    if (icmp_len < ICMP_MINLEN)
         return "(size too small)";
     if (in_cksum((void *)icmp_hdr, icmp_len))
         return "(BAD CHECKSUM)";
-    if (icmp_len < ICMP_HDR_SIZE + g_ping_env.spec.packetlen)
+    if (icmp_len < ICMP_MINLEN + g_ping_env.spec.packetlen)
         return "(truncated)";
     if (icmp_hdr->icmp_seq < g_ping_env.send_infos.current_seq - 1)
         return "(DUP!)";
     return NULL;
-}
-
-static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
-{
-    struct ip       *ip_hdr;
-    struct icmp     *icmp_hdr;
-    float           time_diff;
-    const char      *err_msg;
-    uint32_t        icmp_len;
-
-
-    ip_hdr = (struct ip *)message_buffer;
-    icmp_hdr = (struct icmp *)(message_buffer + (ip_hdr->ip_hl << 2));
-    icmp_len = datalen - (ip_hdr->ip_hl << 2);
-    err_msg = get_corruption_msg(icmp_hdr, icmp_len);
-    if (my_ntohs(icmp_hdr->icmp_id) == (uint16_t)getpid() &&
-            ip_hdr->ip_p == IPPROTO_ICMP)
-    {
-        aknowledge(my_ntohs(icmp_hdr->icmp_seq));
-        resolve_ipv4_addr(ip_hdr->ip_src);
-        if (icmp_hdr->icmp_type == ICMP_ECHOREPLY &&
-            icmp_hdr->icmp_code == 0)
-        {
-            time_diff = add_packet_rtt(icmp_hdr, datalen);
-            print_response_packet(  icmp_len,
-                                    my_ntohs(icmp_hdr->icmp_seq),
-                                    ip_hdr->ip_ttl,
-                                    time_diff,
-                                    err_msg );
-        }
-        g_ping_env.send_infos.packet_recv++;
-    }
 }
 
 void print_err_response(uint16_t sequence, uint8_t type, uint8_t code, struct ip* ip_hdr)
@@ -89,13 +55,51 @@ void print_err_response(uint16_t sequence, uint8_t type, uint8_t code, struct ip
 }
 
 
+static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
+{
+    struct ip       *ip_hdr;
+    struct icmp     *icmp_hdr;
+    const char      *err_msg;
+    float           time_diff;
+    uint32_t        icmp_len;
+
+    ip_hdr = (struct ip *)message_buffer;
+    icmp_hdr = (struct icmp *)(message_buffer + (ip_hdr->ip_hl << 2));
+    icmp_len = datalen - (ip_hdr->ip_hl << 2);
+    err_msg = get_corruption_msg(icmp_hdr, icmp_len);
+    if (my_ntohs(icmp_hdr->icmp_id) == (uint16_t)getpid() &&
+            ip_hdr->ip_p == IPPROTO_ICMP)
+    {
+        aknowledge(my_ntohs(icmp_hdr->icmp_seq));
+        resolve_ipv4_addr(ip_hdr->ip_src);
+        if (icmp_hdr->icmp_type == ICMP_ECHOREPLY &&
+            icmp_hdr->icmp_code == 0)
+        {
+            time_diff = add_packet_rtt(icmp_hdr);
+            print_response_packet(  icmp_len,
+                                    my_ntohs(icmp_hdr->icmp_seq),
+                                    ip_hdr->ip_ttl,
+                                    time_diff,
+                                    err_msg );
+        }
+        else if (g_ping_env.spec.opts & OPT_VERBOSE)
+        {
+            print_err_response( icmp_hdr->icmp_seq,
+                                icmp_hdr->icmp_type,
+                                icmp_hdr->icmp_code,
+                                ip_hdr );
+        }
+        g_ping_env.send_infos.packet_recv++;
+    }
+}
+
 void parse_err_packet(struct sock_extended_err *err, uint16_t sequence)
 {
     struct in_addr              src_addr;
 
+    aknowledge(sequence);
     src_addr = ((struct sockaddr_in *)SO_EE_OFFENDER(err))->sin_addr;
     resolve_ipv4_addr(src_addr);
-    aknowledge(sequence); 
     print_err_response(sequence, err->ee_type, err->ee_code, NULL);
 }
 
@@ -129,8 +133,10 @@ void receive_icmp_packet(void)
     t_msg_data              re_msg;
     int                     message_bytes;
 
-    re_msg = create_message_header(recv_buffer, sizeof(recv_buffer),
-                                    NULL, 0);
+    re_msg = create_message_header( recv_buffer,
+                                    sizeof(recv_buffer),
+                                    NULL,
+                                    0 );
     message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, MSG_WAITALL);
     if (message_bytes > 0)
         parse_icmp_packet(recv_buffer, message_bytes);

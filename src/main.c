@@ -29,8 +29,10 @@ void setup_socket(void)
                             SOL_SOCKET, SO_RCVTIMEO,
                             (void *)&g_ping_env.spec.timeout,
                             sizeof(g_ping_env.spec.timeout) );
-    socketfail = setsockopt(g_ping_env.sockfd, SOL_IP, IP_RECVERR,
-        (char *)&g_ping_env.spec.holderr, sizeof(g_ping_env.spec.holderr));
+    socketfail = setsockopt( g_ping_env.sockfd,
+                             SOL_IP, IP_RECVERR,
+                             (char *)&g_ping_env.spec.holderr,
+                             sizeof(g_ping_env.spec.holderr) );
     if (socketfail)
         error(2, 0, "Internal error");
     socketfail = setsockopt( g_ping_env.sockfd,
@@ -47,7 +49,7 @@ void print_ping_header(void)
         g_ping_env.dest.name,
         g_ping_env.last_resolved_addr.num_addr,
         g_ping_env.spec.packetlen,
-        g_ping_env.spec.packetlen + ICMP_HDR_SIZE);
+        g_ping_env.spec.packetlen + ICMP_MINLEN);
 }
 
 void print_response_packet(int datalen, uint16_t sequence, int ttl, int rtt, const char *err)
@@ -84,8 +86,8 @@ void packet_statistics(void)
     printf( "%d packets transmitted, %d packets received, %.1f%% packet loss, time %dms\n",
                 g_ping_env.send_infos.packet_sent,
                 g_ping_env.send_infos.packet_recv,
-                LOSS_PERCENT(g_ping_env.send_infos.packet_recv,
-                        g_ping_env.send_infos.packet_sent),
+                LOSS_PERCENT(   g_ping_env.send_infos.packet_recv,
+                                g_ping_env.send_infos.packet_sent ),
                 time_passed );
 }
 

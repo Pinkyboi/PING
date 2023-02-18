@@ -36,8 +36,9 @@ static void pingv4_usage(void)
 
 void get_ping_opt(int argc, char **argv)
 {
-    int opt;
-    double secs;
+    char    opt;
+    float   secs;
+    int64_t datalen;
 
     while((opt = getopt(argc, argv, "hvni:s:t:W:c:")) != EOF)
     {
@@ -56,7 +57,14 @@ void get_ping_opt(int argc, char **argv)
                 g_ping_env.spec.interval = secs;
                 break;
             case 's':
-                g_ping_env.spec.packetlen = strtol_or_err(optarg, ERR_INVALID_ARG, 1, INT32_MAX);
+			    datalen = atoi(optarg);
+			    if (datalen < 0)
+			    	error(2, 0, ERR_N_PACKET_SIZE, datalen);
+			    if (datalen > ICMP_MAXDATA)
+                    error(2, 0, ERR_L_PACKET_SIZE, datalen);
+                if ((size_t)datalen >= sizeof(struct timeval))
+                    g_ping_env.spec.timestamp = true;
+                g_ping_env.spec.packetlen = datalen;
                 break;
             case 't':
                 g_ping_env.spec.ttl = strtol_or_err(optarg, ERR_INVALID_ARG, 1, MAXTTL);;
