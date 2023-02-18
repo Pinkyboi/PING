@@ -2,13 +2,31 @@
 
 static void print_ip_hdr(struct ip* ip_hdr)
 {
-    (void) ip_hdr;
-    return;
+    static char dest_addr[INET_ADDRSTRLEN];
+    static char src_addr[INET_ADDRSTRLEN];
+
+    printf("hdrlen %d", ip_hdr->ip_hl << 2);
+	printf("Vr HL TOS  Len   ID Flg  off TTL Pro  cks      Src      Dst\n");
+	printf(" %1x  %1x  %02x %04x %04x", ip_hdr->ip_v >> 2,
+                                        ip_hdr->ip_hl << 2,
+                                        ip_hdr->ip_tos,
+                                        ip_hdr->ip_len,
+                                        ip_hdr->ip_id );
+	printf( "   %1x %04x",  ((ip_hdr->ip_off) & 0xe000) >> 13,
+                            (ip_hdr->ip_off) & 0x1fff );
+	printf("  %02x  %02x %04x", ip_hdr->ip_ttl,
+                                ip_hdr->ip_p,
+                                ip_hdr->ip_sum );
+
+    inet_ntop(AF_INET, &ip_hdr->ip_src, src_addr, sizeof(src_addr));
+    inet_ntop(AF_INET, &ip_hdr->ip_dst, dest_addr, sizeof(dest_addr));
+	printf(" %s ", dest_addr);
+	printf(" %s ", src_addr);
+	printf("\n");  
 }
 
 void print_icmp_err(int type, int code, struct ip* ip_hdr)
 {
-
     if (type == ICMP_ECHOREPLY)
     {
         if (code == ICMP_UNREACH_NET)
