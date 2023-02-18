@@ -19,7 +19,7 @@ static t_msg_data create_message_header(void* message_buffer, int message_len,
 
 static void aknowledge(uint16_t seq)
 {
-    if (seq < g_ping_env.send_infos.current_seq)
+    if (seq <= g_ping_env.send_infos.current_seq)
         g_ping_env.send_infos.aknowledged = true;
 }
 
@@ -137,7 +137,7 @@ void receive_icmp_packet(void)
                                     sizeof(recv_buffer),
                                     NULL,
                                     0 );
-    message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, MSG_WAITALL);
+    message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, 0);
     if (message_bytes > 0)
         parse_icmp_packet(recv_buffer, message_bytes);
     else if (message_bytes < 0)

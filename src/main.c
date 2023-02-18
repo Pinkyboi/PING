@@ -10,8 +10,8 @@ t_ping_env g_ping_env = {
         .holderr = true
     },
     .send_infos = {
-        .current_seq = 1,
-        .aknowledged = false,
+        .current_seq = 0,
+        .aknowledged = true,
         .stop = false
     },
 };
@@ -29,6 +29,8 @@ void setup_socket(void)
                             SOL_SOCKET, SO_RCVTIMEO,
                             (void *)&g_ping_env.spec.timeout,
                             sizeof(g_ping_env.spec.timeout) );
+    if (socketfail)
+        error(2, 0, "Internal error"); 
     socketfail = setsockopt( g_ping_env.sockfd,
                              SOL_IP, IP_RECVERR,
                              (char *)&g_ping_env.spec.holderr,
@@ -105,6 +107,8 @@ void handle_signal(int sig)
         g_ping_env.send_infos.stop = true;
     if (sig == SIGALRM)
     {
+        if (g_ping_env.send_infos.aknowledged)
+            g_ping_env.send_infos.current_seq++;
         send_icmp_packet();
         alarm(g_ping_env.spec.interval);
         g_ping_env.send_infos.aknowledged = false;
