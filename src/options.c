@@ -62,8 +62,8 @@ void get_ping_opt(int argc, char **argv)
 			    	error(2, 0, ERR_N_PACKET_SIZE, datalen);
 			    if (datalen > ICMP_MAXDATA)
                     error(2, 0, ERR_L_PACKET_SIZE, datalen);
-                if ((size_t)datalen >= sizeof(struct timeval))
-                    g_ping_env.spec.timestamp = true;
+                if ((size_t)datalen < sizeof(struct timeval))
+                    g_ping_env.spec.timestamp = false;
                 g_ping_env.spec.packetlen = datalen;
                 break;
             case 't':

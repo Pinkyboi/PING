@@ -1,4 +1,3 @@
-
 #include "ft_ping.h"
 
 t_ping_env g_ping_env = {
@@ -7,13 +6,14 @@ t_ping_env g_ping_env = {
         .packetlen = DEFAULT_PACKETLEN,
         .ttl = DEFAULT_TTL,
         .timeout = { DEFAULT_TIMEOUT_SEC, 0 },
-        .holderr = true
+        .holderr = true,
+        .timestamp = true,
     },
     .send_infos = {
-        .current_seq = 0,
-        .aknowledged = true,
-        .stop = false
-    },
+        .current_seq = 1,
+        .aknowledged = false,
+        .stop = false,
+    }
 };
 
 void setup_socket(void)
@@ -84,12 +84,15 @@ void packet_statistics(void)
 {
     int   time_passed;
 
-    time_passed = usec_time_diff(g_ping_env.rtt.s_time, get_timeval());
-    printf( "%d packets transmitted, %d packets received, %.1f%% packet loss, time %dms\n",
+    time_passed = usec_time_diff(g_ping_env.send_infos.s_time, get_timeval());
+    printf( "%d packets transmitted, %d packets received, ",
                 g_ping_env.send_infos.packet_sent,
-                g_ping_env.send_infos.packet_recv,
-                LOSS_PERCENT(   g_ping_env.send_infos.packet_recv,
-                                g_ping_env.send_infos.packet_sent ),
+                g_ping_env.send_infos.packet_recv);
+    if (g_ping_env.send_infos.error_count)
+        printf("+%d errors, ", g_ping_env.send_infos.error_count);
+    printf("%.1f%% packet loss, time %dms\n",
+                LOSS_PERCENT( g_ping_env.send_infos.packet_recv,
+                              g_ping_env.send_infos.packet_sent ),
                 time_passed );
 }
 
@@ -107,24 +110,22 @@ void handle_signal(int sig)
         g_ping_env.send_infos.stop = true;
     if (sig == SIGALRM)
     {
-        if (g_ping_env.send_infos.aknowledged)
-            g_ping_env.send_infos.current_seq++;
         send_icmp_packet();
         alarm(g_ping_env.spec.interval);
         g_ping_env.send_infos.aknowledged = false;
     }
     if (sig == SIGQUIT)
-        packet_statistics();
+        rtt_current_stats();
 }
 
 void ping_routine()
 {
-    g_ping_env.rtt.s_time = get_timeval();
     print_ping_header();
-    handle_signal(SIGALRM);
     signal(SIGINT, handle_signal);
     signal(SIGALRM, handle_signal);
     signal(SIGQUIT, handle_signal);
+    g_ping_env.send_infos.s_time = get_timeval();
+    handle_signal(SIGALRM);
     while(!g_ping_env.send_infos.stop)
     {
         if ((g_ping_env.spec.opts & OPT_NPACKET) &&

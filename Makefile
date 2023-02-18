@@ -3,9 +3,7 @@ NAME = ft_ping
 
 CC = gcc
 
-
 CFLAGS = -Wall -Werror -Wextra
-# CFLAGS = 
 
 SRC_PATH = ./src
 OBJ_PATH = ./obj
@@ -32,7 +30,7 @@ HDR = $(addprefix $(INC_PATH)/,$(HDR_FILES))
 SRC = $(addprefix $(SRC_PATH)/,$(SRC_FILES))
 OBJ = $(addprefix $(OBJ_PATH)/,$(OBJ_FILES))
 
-LIBS = -L$(LIBFT_PATH) -lft
+LIBS = -L$(LIBFT_PATH) -lft -lm
 
 INC = -I$(INC_PATH) -I$(LIBFT_INC)
 

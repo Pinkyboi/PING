@@ -30,5 +30,8 @@ void send_icmp_packet(void)
                             &g_ping_env.dest.sock_addr,
                             g_ping_env.dest.addr_info.ai_addrlen);
     if (sendto_status > 0)
+    {
         g_ping_env.send_infos.packet_sent++;
+        g_ping_env.send_infos.current_seq++;
+    }
 }

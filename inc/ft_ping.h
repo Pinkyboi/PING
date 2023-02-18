@@ -57,6 +57,8 @@
 #define ERR_N_PACKET_SIZE   "illegal negative packet size %d.\n"
 #define ERR_L_PACKET_SIZE   "packet size too large: %d\n"
 
+#define EWMA_ALPHA  0.5
+#define RTT_EWMA(RTT)    ((EWMA_ALPHA * RTT) + ((1 - EWMA_ALPHA) * g_ping_env.rtt.rtt_ewma))
 
 typedef enum bool{
 
@@ -105,19 +107,21 @@ typedef struct          s_resolved_addr
 
 typedef struct          s_rtt_info
 {
-    struct timeval      s_time;
     int                 rtt_count;
     int                 rtt_sum;
     float               rtt_min;
     float               rtt_max;
+    float               rtt_ewma;
     t_list              *rtt_list;
 }                       t_rtt_info;
 
 typedef struct          t_sending_info
 {
+    struct timeval      s_time;
     uint16_t            current_seq;
     uint32_t            packet_sent;
     uint32_t            packet_recv;
+    uint32_t            error_count;
     bool                aknowledged;
     bool                recv;
     bool                stop;
@@ -163,6 +167,7 @@ void                    get_dest_addr(char *host_name);
 // rtt functions
 float                   get_mdev_rtt(t_list *rtt_list, float avg_rtt);
 void                    rtt_statistics(void);
+void                    rtt_current_stats(void);
 void                    update_rtt(float rtt);
 float                   add_packet_rtt(void *icmp_packet);
 

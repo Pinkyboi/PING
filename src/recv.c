@@ -82,14 +82,17 @@ static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
                                     time_diff,
                                     err_msg );
         }
-        else if (g_ping_env.spec.opts & OPT_VERBOSE)
+        else
         {
-            print_err_response( icmp_hdr->icmp_seq,
-                                icmp_hdr->icmp_type,
-                                icmp_hdr->icmp_code,
-                                ip_hdr );
+            g_ping_env.send_infos.error_count++;
+            if (g_ping_env.spec.opts & OPT_VERBOSE)
+            {
+                print_err_response( icmp_hdr->icmp_seq,
+                                    icmp_hdr->icmp_type,
+                                    icmp_hdr->icmp_code,
+                                    ip_hdr );
+            }
         }
-        g_ping_env.send_infos.packet_recv++;
     }
 }
 
@@ -101,11 +104,12 @@ void parse_err_packet(struct sock_extended_err *err, uint16_t sequence)
     src_addr = ((struct sockaddr_in *)SO_EE_OFFENDER(err))->sin_addr;
     resolve_ipv4_addr(src_addr);
     print_err_response(sequence, err->ee_type, err->ee_code, NULL);
+    g_ping_env.send_infos.error_count++;
 }
 
 void read_err_msg(void)
 {
-    char                        control_buffer[C_MAXPACKET];
+    static char                 control_buffer[C_MAXPACKET];
     struct icmp                 icmp_hdr;
     t_msg_data                  err_msg;
     t_cmsg_info                 cmsg_info;
@@ -129,7 +133,7 @@ void read_err_msg(void)
 
 void receive_icmp_packet(void)
 {
-    char                    recv_buffer[IP_MAXPACKET];
+    static char             recv_buffer[IP_MAXPACKET];
     t_msg_data              re_msg;
     int                     message_bytes;
 
@@ -142,4 +146,6 @@ void receive_icmp_packet(void)
         parse_icmp_packet(recv_buffer, message_bytes);
     else if (message_bytes < 0)
         read_err_msg();
+    if (message_bytes)
+        g_ping_env.send_infos.packet_recv++;
 }
