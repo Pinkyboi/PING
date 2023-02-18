@@ -51,7 +51,7 @@ void get_ping_opt(int argc, char **argv)
                 g_ping_env.spec.opts |= OPT_NUMERIC;
                 break;
             case 'i':
-                secs = atof(optarg);
+                secs = atoi(optarg);
                 if (secs <= 0.0 || secs > (double)INT32_MAX / 1000.0)
                     error(2, 0, "Bad timing interval: %s", optarg);
                 g_ping_env.spec.interval = secs;

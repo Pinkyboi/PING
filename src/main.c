@@ -84,7 +84,7 @@ void packet_statistics(void)
 {
     int   time_passed;
 
-    time_passed = usec_time_diff(g_ping_env.send_infos.s_time, get_timeval());
+    time_passed = usec_time_diff(g_ping_env.rtt.s_time, get_timeval());
     printf( "%d packets transmitted, %d packets received, ",
                 g_ping_env.send_infos.packet_sent,
                 g_ping_env.send_infos.packet_recv);
@@ -124,7 +124,7 @@ void ping_routine()
     signal(SIGINT, handle_signal);
     signal(SIGALRM, handle_signal);
     signal(SIGQUIT, handle_signal);
-    g_ping_env.send_infos.s_time = get_timeval();
+    g_ping_env.rtt.s_time = get_timeval();
     handle_signal(SIGALRM);
     while(!g_ping_env.send_infos.stop)
     {

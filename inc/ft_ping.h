@@ -74,8 +74,8 @@ typedef struct s_ping_spec
     u_int64_t       npacket;
     bool            holderr;
     bool            timestamp;
-    int             ttl;
-    float           interval;
+    uint8_t         ttl;
+    int32_t         interval;
     struct timeval  timeout;
 }               t_ping_spec; 
 
