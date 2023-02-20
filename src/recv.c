@@ -31,29 +31,10 @@ static const char* get_corruption_msg(struct icmp *icmp_hdr, uint32_t icmp_len)
         return "(BAD CHECKSUM)";
     if (icmp_len < ICMP_MINLEN + g_ping_env.spec.packetlen)
         return "(truncated)";
-    if (icmp_hdr->icmp_seq < g_ping_env.send_infos.current_seq - 1)
+    if (my_ntohs(icmp_hdr->icmp_seq) < g_ping_env.send_infos.current_seq - 1)
         return "(DUP!)";
     return NULL;
 }
-
-void print_err_response(uint16_t sequence, uint8_t type, uint8_t code, struct ip* ip_hdr)
-{
-    if (g_ping_env.spec.opts & OPT_NUMERIC)
-    {
-        printf( "From %s icmp_seq=%d ",
-                g_ping_env.last_resolved_addr.num_addr,
-                sequence);
-    }
-    else
-    {
-        printf( "From %s (%s) icmp_seq=%d ",
-                g_ping_env.last_resolved_addr.full_addr,
-                g_ping_env.last_resolved_addr.num_addr,
-                sequence );
-    }
-    print_icmp_err(type, code, ip_hdr);
-}
-
 
 static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
 {
@@ -116,12 +97,12 @@ void read_err_msg(void)
 
     err_msg = create_message_header(&icmp_hdr, sizeof(icmp_hdr),
         control_buffer, sizeof(control_buffer));
-    if (recvmsg(g_ping_env.sockfd, &err_msg.msg_hdr, MSG_ERRQUEUE) > 0)
+    if (recvmsg(g_ping_env.sockfd, &err_msg.msg_hdr, MSG_ERRQUEUE | MSG_DONTWAIT) > 0)
     {
         cmsg_info = (t_cmsg_info){.cmsg = CMSG_FIRSTHDR(&err_msg.msg_hdr)};
         while (cmsg_info.cmsg)
         {
-            if (cmsg_info.cmsg->cmsg_level == SOL_IP &&
+            if (cmsg_info.cmsg->cmsg_level == IPPROTO_IP &&
                     cmsg_info.cmsg->cmsg_type == IP_RECVERR)
                 cmsg_info.error_ptr = (struct sock_extended_err *)CMSG_DATA(cmsg_info.cmsg);
             cmsg_info.cmsg = CMSG_NXTHDR(&err_msg.msg_hdr, cmsg_info.cmsg);
@@ -143,9 +124,10 @@ void receive_icmp_packet(void)
                                     0 );
     message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, 0);
     if (message_bytes > 0)
+    {
         parse_icmp_packet(recv_buffer, message_bytes);
+        g_ping_env.send_infos.packet_recv++;
+    }
     else if (message_bytes < 0)
         read_err_msg();
-    if (message_bytes)
-        g_ping_env.send_infos.packet_recv++;
 }

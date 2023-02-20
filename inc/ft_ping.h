@@ -47,7 +47,7 @@
 #define OPT_TIMEOUT     ((0x1) << 6)
 #define OPT_NPACKET     ((0x1) << 7)
 
-#define PROGNAME        "ft_ping"
+#define PROGNAME            "ft_ping"
 
 #define ERR_NULL_ARG_MSG    "option requires an argument -- %c"
 #define ERR_RANGE_ARG_MSG   "invalid argument: '%s': out of range: %ld <= value <= %ld"
@@ -152,7 +152,6 @@ struct timeval          secs_to_timeval(double secs);
 float                   usec_time_diff(struct timeval start, struct timeval end);
 
 // error functions
-void                    print_icmp_err(int type, int code, struct ip* ip_hdr);
 void                    error(uint8_t code, int err, char *err_format, ...);
 
 
@@ -166,13 +165,17 @@ void                    get_dest_addr(char *host_name);
 
 // rtt functions
 float                   get_mdev_rtt(t_list *rtt_list, float avg_rtt);
-void                    rtt_statistics(void);
-void                    rtt_current_stats(void);
 void                    update_rtt(float rtt);
 float                   add_packet_rtt(void *icmp_packet);
 
-// packet print
+// print
 void                    print_response_packet(int datalen, uint16_t sequence,
                             int ttl, int rtt, const char *err);
+void                    print_err_response(uint16_t sequence, uint8_t type,
+                            uint8_t code, struct ip* ip_hdr);
+void                    print_icmp_err(int type, int code, struct ip* ip_hdr);
+void                    print_rtt_current_stats(void);
+void                    print_ping_statistics(void);
+void                    print_ping_header(void);
 
 #endif

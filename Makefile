@@ -22,7 +22,8 @@ SRC_FILES = main.c\
 			send.c\
 			recv.c\
 			address.c\
-			rtt.c
+			rtt.c\
+			print.c
 
 OBJ_FILES = $(SRC_FILES:.c=.o)
 

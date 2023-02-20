@@ -32,7 +32,7 @@ void setup_socket(void)
     if (socketfail)
         error(2, 0, "Internal error"); 
     socketfail = setsockopt( g_ping_env.sockfd,
-                             SOL_IP, IP_RECVERR,
+                             IPPROTO_IP, IP_RECVERR,
                              (char *)&g_ping_env.spec.holderr,
                              sizeof(g_ping_env.spec.holderr) );
     if (socketfail)
@@ -45,64 +45,6 @@ void setup_socket(void)
         error(2, errno, "Internal error");
 }
 
-void print_ping_header(void)
-{
-    printf("PING %s (%s): %d(%d) bytes of data\n",
-        g_ping_env.dest.name,
-        g_ping_env.last_resolved_addr.num_addr,
-        g_ping_env.spec.packetlen,
-        g_ping_env.spec.packetlen + ICMP_MINLEN);
-}
-
-void print_response_packet(int datalen, uint16_t sequence, int ttl, int rtt, const char *err)
-{
-    if (g_ping_env.spec.opts & OPT_NUMERIC)
-    {
-        printf( "%d bytes from %s icmp_seq=%d ttl=%d",
-                datalen,
-                g_ping_env.last_resolved_addr.num_addr,
-                sequence,
-                ttl );
-    }
-    else
-    {
-        printf( "%d bytes from %s (%s) icmp_seq=%d ttl=%d",
-                datalen,
-                g_ping_env.last_resolved_addr.full_addr,
-                g_ping_env.last_resolved_addr.num_addr,
-                sequence,
-                ttl );
-    }
-    if (rtt)
-        printf(" time=%dms", rtt);
-    if (err)
-        printf(" %s", err);
-    printf("\n");
-}
-
-void packet_statistics(void)
-{
-    int   time_passed;
-
-    time_passed = usec_time_diff(g_ping_env.rtt.s_time, get_timeval());
-    printf( "%d packets transmitted, %d packets received, ",
-                g_ping_env.send_infos.packet_sent,
-                g_ping_env.send_infos.packet_recv);
-    if (g_ping_env.send_infos.error_count)
-        printf("+%d errors, ", g_ping_env.send_infos.error_count);
-    printf("%.1f%% packet loss, time %dms\n",
-                LOSS_PERCENT( g_ping_env.send_infos.packet_recv,
-                              g_ping_env.send_infos.packet_sent ),
-                time_passed );
-}
-
-void ping_statistics(void)
-{
-    printf("\n--- %s ping statistics ---\n", g_ping_env.dest.name);
-    packet_statistics();
-    if (g_ping_env.rtt.rtt_list)
-        rtt_statistics();
-}
 
 void handle_signal(int sig)
 {
@@ -115,7 +57,7 @@ void handle_signal(int sig)
         g_ping_env.send_infos.aknowledged = false;
     }
     if (sig == SIGQUIT)
-        rtt_current_stats();
+        print_rtt_current_stats();
 }
 
 void ping_routine()
@@ -124,7 +66,7 @@ void ping_routine()
     signal(SIGINT, handle_signal);
     signal(SIGALRM, handle_signal);
     signal(SIGQUIT, handle_signal);
-    g_ping_env.rtt.s_time = get_timeval();
+    g_ping_env.send_infos.s_time = get_timeval();
     handle_signal(SIGALRM);
     while(!g_ping_env.send_infos.stop)
     {
@@ -135,11 +77,13 @@ void ping_routine()
             receive_icmp_packet();
         usleep(10);
     }
-    ping_statistics();
+    print_ping_statistics();
 };
 
 int main(int argc, char **argv)
 {
+    if (getuid())
+        error(2, 0, "You need to be root to run this program");
     get_ping_opt(argc, argv);
     get_dest_addr(g_ping_env.dest.name);
     resolve_ipv4_addr(g_ping_env.dest.bytes_addr);
