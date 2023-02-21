@@ -30,6 +30,8 @@ static void print_rtt_final_statistics(void)
     float   avg_rtt;
     float   mdev_rtt;
 
+    if(!g_ping_env.rtt.rtt_count)
+        return;
     avg_rtt = g_ping_env.rtt.rtt_sum / g_ping_env.rtt.rtt_count;
     mdev_rtt = get_mdev_rtt(g_ping_env.rtt.rtt_list, avg_rtt);
     printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n",
@@ -51,6 +53,8 @@ void print_rtt_current_stats(void)
 {
     float   avg_rtt;
 
+    if(!g_ping_env.rtt.rtt_count)
+        return;
     avg_rtt = g_ping_env.rtt.rtt_sum / g_ping_env.rtt.rtt_count;
     printf("%d/%d packets, %d%% loss, min/avg/ewma/max = %.3f/%.3f/%.3f/%.3f ms\n",
             g_ping_env.send_infos.packet_recv,
