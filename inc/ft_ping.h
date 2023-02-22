@@ -113,11 +113,12 @@ typedef struct          s_rtt_info
     float               rtt_max;
     float               rtt_ewma;
     t_list              *rtt_list;
+    struct timeval      r_time;
+    int                 time;
 }                       t_rtt_info;
 
 typedef struct          t_sending_info
 {
-    struct timeval      s_time;
     uint16_t            current_seq;
     uint32_t            packet_sent;
     uint32_t            packet_recv;
@@ -166,7 +167,8 @@ void                    get_dest_addr(char *host_name);
 // rtt functions
 float                   get_mdev_rtt(t_list *rtt_list, float avg_rtt);
 void                    update_rtt(float rtt);
-float                   add_packet_rtt(void *icmp_packet);
+float                   add_packet_rtt(void *icmp_packet, struct timeval current_time);
+void                    calculate_final_time(struct timeval current_time);
 
 // print
 void                    print_response_packet(int datalen, uint16_t sequence,

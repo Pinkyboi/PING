@@ -11,9 +11,6 @@ void print_ping_header(void)
 
 static void packet_statistics(void)
 {
-    int   time_passed;
-
-    time_passed = usec_time_diff(g_ping_env.send_infos.s_time, get_timeval());
     printf( "%d packets transmitted, %d packets received, ",
                 g_ping_env.send_infos.packet_sent,
                 g_ping_env.send_infos.packet_recv);
@@ -22,7 +19,7 @@ static void packet_statistics(void)
     printf("%.1f%% packet loss, time %dms\n",
                 LOSS_PERCENT( g_ping_env.send_infos.packet_recv,
                               g_ping_env.send_infos.packet_sent ),
-                time_passed );
+                g_ping_env.rtt.time );
 }
 
 static void print_rtt_final_statistics(void)

@@ -36,12 +36,11 @@ static const char* get_corruption_msg(struct icmp *icmp_hdr, uint32_t icmp_len)
     return NULL;
 }
 
-static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
+static void parse_icmp_packet(char *message_buffer, uint32_t datalen, struct timeval recv_time)
 {
     struct ip       *ip_hdr;
     struct icmp     *icmp_hdr;
     const char      *err_msg;
-    float           time_diff;
     uint32_t        icmp_len;
 
     ip_hdr = (struct ip *)message_buffer;
@@ -56,11 +55,10 @@ static void parse_icmp_packet(char *message_buffer, uint32_t datalen)
         if (icmp_hdr->icmp_type == ICMP_ECHOREPLY &&
             icmp_hdr->icmp_code == 0)
         {
-            time_diff = add_packet_rtt(icmp_hdr);
             print_response_packet(  icmp_len,
                                     my_ntohs(icmp_hdr->icmp_seq),
                                     ip_hdr->ip_ttl,
-                                    time_diff,
+                                    add_packet_rtt(icmp_hdr, recv_time),
                                     err_msg );
         }
         else
@@ -115,6 +113,7 @@ void read_err_msg(void)
 void receive_icmp_packet(void)
 {
     static char             recv_buffer[IP_MAXPACKET];
+    struct timeval          recv_time;
     t_msg_data              re_msg;
     int                     message_bytes;
 
@@ -123,9 +122,10 @@ void receive_icmp_packet(void)
                                     NULL,
                                     0 );
     message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, 0);
+    recv_time = get_timeval();
     if (message_bytes > 0)
     {
-        parse_icmp_packet(recv_buffer, message_bytes);
+        parse_icmp_packet(recv_buffer, message_bytes, recv_time);
         g_ping_env.send_infos.packet_recv++;
     }
     else if (message_bytes < 0)

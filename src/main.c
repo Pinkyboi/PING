@@ -13,7 +13,7 @@ t_ping_env g_ping_env = {
         .current_seq = 1,
         .aknowledged = false,
         .stop = false,
-    }
+    },
 };
 
 void setup_socket(void)
@@ -52,6 +52,7 @@ void handle_signal(int sig)
         g_ping_env.send_infos.stop = true;
     if (sig == SIGALRM)
     {
+        calculate_final_time(get_timeval());
         send_icmp_packet();
         alarm(g_ping_env.spec.interval);
         g_ping_env.send_infos.aknowledged = false;
@@ -66,7 +67,6 @@ void ping_routine()
     signal(SIGINT, handle_signal);
     signal(SIGALRM, handle_signal);
     signal(SIGQUIT, handle_signal);
-    g_ping_env.send_infos.s_time = get_timeval();
     handle_signal(SIGALRM);
     while(!g_ping_env.send_infos.stop)
     {

@@ -34,7 +34,14 @@ void update_rtt(float rtt)
     }
 }
 
-float add_packet_rtt(void *icmp_packet)
+void calculate_final_time(struct timeval current_time)
+{
+    if (g_ping_env.rtt.r_time.tv_sec)
+        g_ping_env.rtt.time += usec_time_diff(g_ping_env.rtt.r_time, current_time);
+    g_ping_env.rtt.r_time = current_time;
+}
+
+float add_packet_rtt(void *icmp_packet, struct timeval current_time)
 {
     struct timeval  *time;
     float           time_diff;
@@ -43,7 +50,7 @@ float add_packet_rtt(void *icmp_packet)
     if (g_ping_env.spec.timestamp)
     {
         time = (struct timeval *)((void *)icmp_packet + ICMP_MINLEN);
-        time_diff = usec_time_diff(*time, get_timeval());
+        time_diff = usec_time_diff(*time, current_time);
         update_rtt(time_diff);
     }
     return time_diff;
