@@ -60,6 +60,7 @@ static void parse_icmp_packet(char *message_buffer, uint32_t datalen, struct tim
                                     ip_hdr->ip_ttl,
                                     add_packet_rtt(icmp_hdr, recv_time),
                                     err_msg );
+            g_ping_env.send_infos.packet_recv++;
         }
         else
         {
@@ -124,10 +125,7 @@ void receive_icmp_packet(void)
     message_bytes = recvmsg(g_ping_env.sockfd, &re_msg.msg_hdr, 0);
     recv_time = get_timeval();
     if (message_bytes > 0)
-    {
         parse_icmp_packet(recv_buffer, message_bytes, recv_time);
-        g_ping_env.send_infos.packet_recv++;
-    }
     else if (message_bytes < 0)
         read_err_msg();
 }
