@@ -6,8 +6,8 @@ static void print_ip_hdr(struct ip* ip_hdr)
     static char src_addr[INET_ADDRSTRLEN];
 
 	printf("Vr HL TOS  Len   ID Flg  off TTL Pro  cks      Src      Dst\n");
-	printf(" %1x  %1x  %02x %04x %04x", ip_hdr->ip_v >> 2,
-                                        ip_hdr->ip_hl << 2,
+	printf(" %1x  %1x  %02x %04x %04x", ip_hdr->ip_v,
+                                        ip_hdr->ip_hl,
                                         ip_hdr->ip_tos,
                                         ip_hdr->ip_len,
                                         ip_hdr->ip_id );
